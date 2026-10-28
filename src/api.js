@@ -12,7 +12,9 @@ const j = (r) => {
 //  · 是不是在 Tauri 壳里 —— 用 __TAURI_INTERNALS__ 判断，**不能**用 protocol 判断：
 //    `tauri dev` 的 protocol 也是 http，但桌面桥接（invoke / 事件）在那种模式下同样存在。
 const isTauriProtocol = !window.location.protocol.startsWith("http");
-export const API_BASE = isTauriProtocol ? "http://localhost:8787" : "";
+// 用 127.0.0.1 而不是 localhost：后端只监听回环 IPv4（server.mjs），
+// 而 localhost 在 macOS 上先解析到 ::1，多走一次失败再回退。
+export const API_BASE = isTauriProtocol ? "http://127.0.0.1:8787" : "";
 /** Rust 侧的冲突错误用 "CONFLICT\u{1}<mtime>" 前缀传回来（见 lib.rs 的 write_file）。
  *  转成结构化对象，前端不用去猜字符串。 */
 function toConflict(e) {

@@ -839,7 +839,9 @@ const server = http.createServer(async (req, res) => {
 });
 
 await loadRoots();
-server.listen(PORT, () => {
+// 只监听回环地址。这个 API 没有鉴权（本机应用不需要），
+// 绑到 0.0.0.0 就等于把整个知识库的读写权交给同一 Wi-Fi 下的任何人。
+server.listen(PORT, "127.0.0.1", () => {
   console.log(`\n  Blanc 已启动（${SINGLE_ROOT ? "独立模式" : "多知识库模式"}）`);
   for (const r of ROOTS) console.log(`  📚 ${r}`);
   console.log(`  打开: http://localhost:${PORT}/\n`);
