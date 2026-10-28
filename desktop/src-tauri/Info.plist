@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  合并进 Tauri 默认 Info.plist 的补充项（tauri.conf.json 的 bundle.macOS.infoPlist，
+  Tauri 也会自动找同目录下的 Info.plist）。
+
+  LSHandlerRank：
+    Alternate —— 只在「打开方式」里排最后
+    Default  —— 会出现在候选里（tauri-bundler 默认就写这个）
+    Owner    —— 声明「这个类型归我」，排在最前、双击直接用
+  放在**顶层**是给 UTImportedTypeDeclarations 用的；
+  CFBundleDocumentTypes 里的 rank 要写在每个 dict 内部（Tauri 自动生成那些 dict，
+  这里只能改顶层）。实际效果：安装后首次打开 .md 时 macOS 会弹一次
+  「要更改打开方式吗」，用户同意后就是本应用 —— 这是 Apple 规定的授权流程。
+-->
+<plist version="1.0">
+<dict>
+	<key>NSHumanReadableCopyright</key>
+	<string>大白笔记</string>
+	<key>NSSupportsAutomaticTermination</key>
+	<true/>
+	<key>NSSupportsSuddenTermination</key>
+	<false/>
+</dict>
+</plist>

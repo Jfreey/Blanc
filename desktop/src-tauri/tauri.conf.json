@@ -1,0 +1,73 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Blanc",
+  "version": "0.1.0",
+  "identifier": "org.blanc.notes",
+  "build": {
+    "beforeDevCommand": "while [ ! -f package.json ] && [ '$PWD' != '/' ]; do cd ..; done; npm run dev",
+    "beforeBuildCommand": "while [ ! -f package.json ] && [ '$PWD' != '/' ]; do cd ..; done; npm run build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Blanc",
+        "width": 1180,
+        "height": 760,
+        "backgroundColor": "#f7f6f3",
+        "minWidth": 840,
+        "minHeight": 560,
+        "resizable": true,
+        "fullscreen": false,
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "trafficLightPosition": { "x": 18, "y": 26 },
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg"
+    ],
+    "resources": {
+      "../../server.mjs": "server.mjs"
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown",
+          "mdown",
+          "mkd",
+          "mdx"
+        ],
+        "name": "Markdown Document",
+        "description": "Markdown 文档",
+        "role": "Editor",
+        "mimeType": "text/markdown",
+        "contentTypes": [
+          "public.plain-text",
+          "net.daringfireball.markdown"
+        ]
+      }
+    ],
+    "icon": [
+      "icons/icon32.png",
+      "icons/icon128.png",
+      "icons/icon128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

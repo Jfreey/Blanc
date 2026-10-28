@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Quick Look 预览扩展（appex）。
+  Obsidian / Typora / Marked 之类都是这么做的：真正的预览由 appex 提供，
+  macOS 没有「默认 Quick Look 应用」这个设置项 —— 系统按 QLSupportedContentTypes
+  挑能处理该类型的扩展，谁先注册谁先生效。
+-->
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh_CN</string>
+	<key>CFBundleDisplayName</key>
+	<string>大白笔记</string>
+	<key>CFBundleExecutable</key>
+	<string>BlancQuickLook</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.blanc.notes.quicklook</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>BlancQuickLook</string>
+	<key>CFBundlePackageType</key>
+	<string>XPC!</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>0.1.0</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>12.0</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.quicklook.preview</string>
+		<!-- 必须是这个 Swift 类的 ObjC 名；Swift 类默认会被 mangle，所以代码里要写 @objc(PreviewViewController) -->
+		<key>NSExtensionPrincipalClass</key>
+		<string>PreviewViewController</string>
+		<key>NSExtensionAttributes</key>
+		<dict>
+			<key>QLSupportedContentTypes</key>
+			<array>
+				<string>public.markdown</string>
+				<string>net.daringfireball.markdown</string>
+				<string>net.ia.markdown</string>
+			</array>
+			<key>QLSupportsSearchableItems</key>
+			<false/>
+		</dict>
+	</dict>
+</dict>
+</plist>

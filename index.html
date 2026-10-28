@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Web 版图标：public/blanc-icon.svg（Vite 会把 public/ 原样拷到 dist 根） -->
+    <link rel="icon" href="/blanc-icon.svg" type="image/svg+xml" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Blanc</title>
+
+    <!-- 首屏防白闪。三段都在 <head> 里、内联、**不依赖任何外部资源**：
+         ① 主题落地 —— React 里那个设 data-theme 的 useEffect 要等整个模块图
+            （App.jsx 1.9MB / gzip 617KB）加载完才跑，实测 FCP 在 488ms。
+            那之前 CSS 里没有 data-theme，只会取 :root 的亮色默认值 ——
+            夜间模式的用户看到的就是「白一下再变黑」。这里提前读 uiPrefs 把
+            属性落上，CSS 一到就能用对的配色。
+         ② 背景兜底 —— styles.css 只给 body 设了背景，而 **html 是透明的**
+            （实测 getComputedStyle(html).backgroundColor = rgba(0,0,0,0)），
+            body 出现之前浏览器画的是默认白色画布。这里把 html 也铺上。
+         ③ color-scheme —— 让画布、滚动条、表单控件跟着主题走，
+            否则暗色下滚动条那片亮边也算一次闪。
+
+         代价是几十字节的内联脚本，和 App.jsx 里那份逻辑重复了一小段
+         （那边仍要留着：它负责运行中响应系统主题变化）。
+         这是**故意重复**的 —— 这段必须同步执行，等不得模块加载。 -->
+    <script>
+      (function () {
+        try {
+          var p = JSON.parse(localStorage.getItem("blanc-ui") || "{}");
+          var m = p.themeMode || "auto";
+          var dark = m === "dark"
+            || (m === "auto" && matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.dataset.theme = dark ? "dark" : "light";
+        } catch (e) { /* 读不到就交给 CSS 的默认值 */ }
+      })();
+    </script>
+    <style>
+      /* 跟着上面刚落好的 data-theme 走，三档（跟随系统/强制亮/强制暗）都对。
+         这两个色值和 styles.css 里 :root / :root[data-theme="dark"] 的 --bg 一致。 */
+      html { background: #ffffff; }
+      html[data-theme="dark"] { background: #191918; }
+      /* color-scheme 必须分两档写：它是**继承给浏览器 UI** 的，
+         一律写 dark 会让强制亮色下的滚动条变成深色。 */
+      html[data-theme="light"] { color-scheme: light; }
+      html[data-theme="dark"]  { color-scheme: dark; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

@@ -1,0 +1,44 @@
+{
+  "name": "blanc",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Blanc — 本地优先的 Markdown 笔记应用。一篇一个窗口，笔记就是磁盘上的 .md 文件。",
+  "scripts": {
+    "dev": "vite",
+    "dev:all": "./dev.sh",
+    "dev:api": "node server.mjs",
+    "dev:web": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "node": "node server.mjs",
+    "tauri:dev": "npx tauri dev --config desktop/src-tauri/tauri.conf.json",
+    "tauri:build": "node scripts/tauri-build.mjs && npm run ql:build && npm run ql:inject",
+    "ql:build": "./desktop/quicklook/build-ql.sh",
+    "ql:inject": "./desktop/quicklook/inject-ql.sh",
+    "check": "node scripts/check-window-opts.mjs && node scripts/check-undeclared-idents.mjs && node scripts/check-tdz.mjs && node scripts/check-scope.mjs && vite build"
+  },
+  "dependencies": {
+    "@milkdown/crepe": "^7.22.3",
+    "@tauri-apps/api": "^2.12.3",
+    "@tauri-apps/plugin-dialog": "^2.8.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "vite": "^8.3.3",
+    "yaml": "^2.9.1"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.1"
+  },
+  "license": "MIT",
+  "keywords": [
+    "markdown",
+    "notes",
+    "tauri",
+    "milkdown",
+    "prosemirror",
+    "local-first",
+    "macos"
+  ]
+}

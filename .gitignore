@@ -1,0 +1,23 @@
+node_modules/
+dist/
+release/
+.DS_Store
+*.log
+desktop/src-tauri/target/
+desktop/src-tauri/gen/
+desktop/quicklook/build/
+
+# 构建/打包中间产物
+*.app
+release/
+STATUS.md
+
+# 1.9MB 的图标风格探索板，35 张变体，纯设计参考素材，不进版本库。
+docs/icon-风格探索板.png
+
+
+需求清单.md
+需求清单-2026-10-13.md
+
+# 工作区内部记忆，不进仓库
+.workbuddy/

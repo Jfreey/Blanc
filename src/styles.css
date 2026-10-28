@@ -1,0 +1,3234 @@
+/* Inter / Rubik：本地自托管（取自 Google Fonts 的可变字重拉丁子集）
+   为什么不用 crepe 主题里点名的 Inter/Rubik：主题只写变量名、不带字体文件，
+   离线 App 里会退到系统字体，和 playground 的观感差一截。
+   中文不在这些子集里，继续走 --font-ui 栈里的 PingFang SC。 */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Inter-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/Inter-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Rubik";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/fonts/Rubik-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C4, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Rubik";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("/fonts/Rubik-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+/* Blanc — Notion 风格主题
+   色板对齐 Notion 实际取值：
+   正文墨色 #37352f · 侧栏 #f7f6f3 · 边框 #ecebe6 · hover rgba(55,53,47,.08)
+   克制：无彩色强调色，选中/激活一律用灰阶 */
+/* ===== inline svg 的全局兜底 =====
+ * 本项目 48 处 inline svg **全部是 24×24 的小图标**，没有一处是要放大展示的。
+ * 但尺寸规则是**逐个调用点各写各的**（.icon-btn svg / .kb-item svg / .expand-btn svg …），
+ * 规则一多就必漏 —— .empty-row 就漏过一次，那个 + 图标渲染成 159×159，
+ * 把整行撑到 169px 高（用户报「新建第一篇笔记的按钮非常巨大」）。
+ *
+ * 这里给一条**零特异度**的兜底：上面那些 `.xxx svg`（0,1,1）优先级更高，
+ * 只在「谁都没管到」时才生效。所以正常图标一个都不会被改到。
+ * ⚠️ 将来真要放一张大图，得给它自己的类名 —— 别指望这条能撑住。 */
+svg { width: 16px; height: 16px; flex: none; }
+
+/* ===== 首启引导（一个知识库都没有时）===== */
+.setup {
+  position: fixed; inset: 0; z-index: 60;
+  display: flex; align-items: center; justify-content: center;
+  /* 用 --side 而不是 --bg：引导页的观感要和侧栏一致（都是"非正文"区域），
+     浅色下 #f7f6f3 比纸白 #fff 更沉，正文区的 --bg 留给编辑器。 */
+  background: var(--side);
+  padding: 24px; overflow: auto;
+}
+.setup-card { width: 100%; max-width: 460px; }
+.setup-card h1 {
+  margin: 0 0 8px; font-size: 24px; font-weight: 650; color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.setup-lead {
+  margin: 0 0 24px; font-size: 14px; line-height: 1.65; color: var(--muted);
+}
+/* 三个选项都做成整行可点的卡片：路径长、还要能折行，
+   按钮那种紧凑胶囊放不下，也放不下第二行的小字说明。 */
+.setup-opt {
+  display: block; width: 100%; text-align: left;
+  padding: 12px 14px; margin-bottom: 8px;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--side); color: var(--ink); cursor: pointer;
+  transition: border-color .12s, background .12s;
+}
+.setup-opt:hover:not(:disabled) { border-color: var(--ink); background: var(--hover-soft); }
+.setup-opt:disabled { opacity: .5; cursor: default; }
+.setup-opt:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.setup-opt-t {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 14px; font-weight: 500;
+}
+.setup-opt-d {
+  display: block; margin-top: 3px;
+  font-size: 12px; color: var(--muted);
+  /* 路径可能很长，家目录窄屏下必须能断行，不能撑破卡片 */
+  word-break: break-all; line-height: 1.5;
+}
+/* 第三个选项是「另选」，视觉上退一档 —— 前两个才是主推的 */
+.setup-opt-alt { background: transparent; border-style: dashed; }
+.setup-opt-alt .setup-opt-t { color: var(--muted); }
+.setup-badge {
+  font-style: normal; font-size: 11px; font-weight: 500;
+  padding: 1px 6px; border-radius: 4px;
+  background: var(--hover); color: var(--muted);
+}
+/* 遗留笔记的告知条。用 --warn 系变量里最接近的一支，
+   不做成按钮 —— 搬文件这种动作不该由首启顺手代办（见 server.mjs setupInfo）。 */
+.setup-warn {
+  margin: 16px 0 0; padding: 9px 11px;
+  border-left: 2px solid var(--line);
+  background: var(--hover-soft); border-radius: 0 var(--r-md) var(--r-md) 0;
+  font-size: 12px; line-height: 1.7; color: var(--muted);
+  word-break: break-all;
+}
+.setup-foot {
+  margin: 20px 0 0; font-size: 12px; line-height: 1.7; color: var(--muted);
+}
+
+:root {
+  --bg: #ffffff;
+  --side: #f7f6f3;
+  --line: #ecebe6;
+  --line-strong: #d3d1cb;
+  /* 浮层统一边框：侧栏 peek 浮层用的那支（比 --line 深一档，浮起来才有边）。
+     所有菜单/弹层/对话框都用它，见文件末尾「浮层边框统一」那一段。 */
+  /* 浮层的高度语言。圆角和投影对齐侧栏悬浮卡（--side-radius / 侧栏卡片那个），
+     这样菜单、对话框、选择器和侧栏卡片看起来是同一套材质浮在同一层高度上。
+     之前是各写各的：圆角 4/6/7/8/10/12 六个值混着，投影两档，
+     同一屏里点开两个东西深浅都不一样。 */
+  --line-float: #d6d4cc;
+  --radius-float: 12px;
+  --shadow-float: 0 2px 30px rgba(15, 15, 15, 0.20);
+  /* 提示类（tooltip / 小标签）单独一档：它小、又贴着底下的字，
+     用菜单那档重投影会糊住内容。 */
+  --shadow-float-sm: 0 1px 3px rgba(15, 15, 15, 0.12);
+  --ink: #37352f;
+  --muted: #9b9a97;
+  --faint: #c9c8c5;
+  --hover: rgba(55, 53, 47, 0.08);
+  --hover-soft: rgba(55, 53, 47, 0.04);
+  /* 危险色：之前散在 8 处硬编码 #e03e3e，抽成一支。
+     --danger-ink / --danger-soft 是给「小字 + 小徽标」用的**淡红一档**：
+     11px 的数字用纯红 #e03e3e 在浅色底上太刺，压低明度、底色用极淡的红。 */
+  --danger: #e03e3e;
+  --danger-ink: #d0574a;
+  --danger-soft: rgba(224, 62, 62, 0.10);
+  /* 右侧悬浮三件套（导航条 / 大纲面板 / 右下角保存胶囊）共用的右缘留白。
+     三者分别定位在 .editor-wrap 和 .main 里，但这两个容器的右缘是同一条线，
+     所以靠这一个变量对齐 —— 之前是 30px / 0 / 10px 三个各写各的，看着像散着长的。 */
+  --inset-r: 10px;
+  /* 滚动条让位量：0 = 三者只按 --inset-r 贴窗口右缘，8 = 再往左让出整条滚动条。
+     现在取 0 —— 让开 8px 之后三者离窗口右缘变成 18px，视觉上比 10px 松垮得多；
+     而 10px 减去 8px 还剩 2px 缝，刻度线并没有真被压住，只是贴着滚动条。
+     真要改回让位，改这一个数就行，两处 right 都是 calc(inset-r + sbw)。 */
+  --sbw: 0px;
+  /* 右侧大纲轨道的几何。单开一组变量放在这里，因为轨道宽度要拿它们算。 */
+  --olr-lw-max: 34px;  /* 最长的一级线 */
+  --olr-lh: 2px;       /* 线的粗细。所有线一样粗，层级只用长度编码 */
+  --olr-panel-w: 230px;
+  /* 正文那一列的宽度（排版宽度，不含左右留白）。非全宽时**先把 720 给足**，
+     剩下的空间再两边均分当留白，留白最多 100、最少 24（窗口特别窄时别贴边）。
+     早先这里把 920 当成「正文宽」写在 max-width 上，于是默认窗口
+     （1180 − 侧栏 280 = 编辑区 900）正文只剩 700 —— 用户 2026-10-21 报「有点窄」。
+     ⚠️ .editor-pad / .doc-title-bar / .editor-skeleton 共用这套几何，
+     只改一处标题、正文、骨架就会各偏几像素。 */
+  --ed-content-w: 720px;
+  /* 非全宽的左右留白：由 100% 是编辑区宽度，所以 (100% - 720) / 2 就是余量的一半 */
+  --ed-gutter: clamp(24px, (100% - var(--ed-content-w)) / 2, 100px);
+  /* 全宽模式的固定留白（html[data-wide]，见 App.jsx 的 wide effect） */
+  --ed-pad-x: 100px;
+  /* 整块正文盒子的上限 = 720 + 两侧各 100；超过它的窗口只是边上更空 */
+  --ed-maxw: calc(var(--ed-content-w) + 2 * var(--ed-pad-x));
+  /* 大纲常驻时，轨道和面板纵向堆叠时中间那道缝 */
+  --olr-gap: 14px;
+  /* 轨道和大纲面板**加起来**占编辑区高度的 50%，上下各留 25%。
+     两者完全重叠、各占满这 50%（互斥显示），不是上下拼的两段。
+     之前是 top/bottom 各 8px（几乎满高），那时候右下角胶囊得专门让开一条横向带
+     （--olr-clear + hover 时的 translateX）。轨道收到中间这半屏之后，
+     底部空出来了，胶囊那套偏移整个不需要了 —— 删掉，少两个魔数。 */
+  --olr-h: 50%;
+  --card: #ffffff;
+  /* ── 侧栏悬浮卡 ──
+     .side 只负责「占位 + 收起动画」，视觉是它 ::before 上那张内缩的卡。
+     三件套放在 :root 便于后面收束到全局时统一调。 */
+  /* 给红绿灯让位的量。⚠️ 2026-10-18 起这些数**不再镜像任何配置项** ——
+     tauri.conf.json / lib.rs 里的 trafficLightPosition 已经去掉了（tao 实现
+     它时把它挂在 drawRect 上反复重写标题栏容器高度，窗口缩放后会正反馈
+     发散，灯被拉成竖长椭圆）。灯现在由 AppKit 自己摆，停在哪就给它留到哪。
+     实测（截图量，2 倍屏会等比缩小，量到的是偏小的值）：
+       --tl-x     左缘        ≈ 7
+       --tl-h     单颗直径    ≈ 10（规范值 12）
+       --tl-pitch 中心间距    ≈ 16（规范值 20）
+     所以真实右缘约 7 + 10 + 16×2 = 49。
+     下面仍然取 18/12/23 → 76px：比实际需要**多留一截**，让位量宁大勿小，
+     灯在哪一版 macOS 上摆都不会压到内容。真要改，先量一遍再改这三个数。 */
+  --tl-x: 18px;
+  --tl-h: 12px;
+  --tl-pitch: 23px;
+  --tl-right: calc(var(--tl-x) + var(--tl-h) + 2 * var(--tl-pitch));   /* = 76px */
+
+  /* 顶栏高度。**唯一真源** —— 下面这三处都由它推出来，不要各写各的：
+       · .topbar 的 height / flex-basis
+       · .side-top 的 margin-top（让侧栏顶行按钮和顶栏内容落在同一条线上）
+       · 期望的红绿灯中心（→ 回推 tauri.conf.json 的 trafficLightPosition.y）
+     为什么不给顶栏按钮换行留余量：按钮 26px，半高 13，48 − 26 = 22 → 上下各 11px，
+     够放；再矮就会显得挤，那时该改的是这个值而不是别处。
+     ⚠️ conf 里的 y 要跟着改，并且**必须是整数以外的数**：
+        实测 y 与灯中心的差恒为 −2.5，所以 y = --topbar-h/2 + 2.5。
+        `scripts/check-window-opts.mjs` 会拿这条关系对账，改了 CSS 忘了改 conf 会红。 */
+  --topbar-h: 48px;
+
+  /* 顶栏底边那道分隔线（2026-10-16 用户指定亮色 = #f1f1f1）。
+     暗色**不能照抄这个值**：#f1f1f1 落在近黑底上是一条刺眼的白杠，
+     而 `--line` 在暗色下是 #2f2f2c、拿来做分隔线又太重（和边框同色会读成「有框」）。 */
+  --topbar-line: #f1f1f1;
+
+  /* 迷你模式几何。数值和 OutlineRail.jsx 顶部的 MW_BASE / MW_MAX 一一对应 ——
+     改一处必须同步改另一处（那边是算波峰宽度的，这边是轨的盒子宽度）。 */
+  --olr-mini-h: 150px;      /* 轨本身的高度 */
+  --olr-mw-base: 8px;       /* 基线刻度长度 */
+  --olr-mw-max: 24px;       /* 波峰刻度长度 = 轨的盒子宽度基准 */
+  --olr-mcard-w: 230px;     /* 片段预览卡宽 */
+
+  --side-inset: 10px;       /* 卡片相对 .side 内缩（上下左右一致）。
+                              同一个值也用作 .side 的 padding，内容跟着落到卡片里面，
+                              所以改这一处卡片和内容会一起走，不会错位。 */
+  --side-radius: 12px;      /* 卡片圆角 */
+  --side-card: #f9f9fa;     /* 卡片底色（比 --side 的 #f7f6f3 更淡、更偏中性） */
+  /* 条目图标的默认色（没设自定义图标时的文件夹 / 文档 / 回收站）。
+     比正文 --ink(#37352f) 淡一档但仍属于墨色系；原来散着写死 #b0aea8，
+     那个灰度太轻，图标看着像被禁用了。 */
+  --icon-dim: #4b4b4b;
+
+  /* ── 列表 ── */
+  --item: #6b6a65;         /* 条目未选中时的字色（--ink 和 --muted 的中值） */
+  --row-pad-x: 6px;        /* 条目左右内边距 */
+  --indent: 16px;          /* 文件树每层缩进 */
+  --indent-first: 10px;    /* 顶层条目的左边距（= 卡片内缩，视觉上贴齐卡内缘） */
+  /* 行状态底色三档：常态无底 / hover / 选中。原来 hover .04、选中 .08，
+     在浅色侧栏上只差一点点，「这个是选中的」和「鼠标恰好停在这行」分不出来。 */
+  --row-hover: rgba(55, 53, 47, 0.045);
+  --row-active: rgba(55, 53, 47, 0.09);
+  /* 分组之间的发丝线 */
+  --divider: rgba(55, 53, 47, 0.07);
+  /* ── 圆角 ── */
+  --r-sm: 4px;
+  --r-md: 6px;
+  /* 全局字体栈（含 emoji 兜底，末尾的 Segoe UI Emoji/Symbol 让 Windows 上的
+     彩色 emoji 走 Segoe 而不是回退到 sans-serif） */
+  --font-ui: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display",
+    "Segoe UI", Helvetica, "PingFang SC", "Microsoft YaHei", Helvetica, "Apple Color Emoji",
+    Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol";
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; overflow: hidden; }
+body {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--ink); background: var(--bg);
+  /* 和 milkdown playground 一致用 auto（次像素抗锯齿）。灰度抗锯齿在浅色底上
+     会让文字明显更细更虚 —— 「比 playground 细」的另一半原因就是这个 */
+  -webkit-font-smoothing: auto;
+}
+/* 界面外壳不参与拖选：只有编辑区能选中文字 */
+.side, .topbar, .toast, .placeholder { user-select: none; -webkit-user-select: none; }
+input, textarea { user-select: text; -webkit-user-select: text; }
+
+/* 宽度和 :root 的 --sbw 是同一个数：那边控制右侧悬浮元素要不要给这条让位
+   （现在 --sbw: 0，不让）。写死 width 也顺带决定了滚动条是覆盖式还是实占式 ——
+   写了 width，macOS 的覆盖式滚动条就变成实占布局的 8px，右缘那 10px 里
+   有 8px 是滚动条的过道，内容只剩 2px 缝。 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: var(--scrollbar); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-hover); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* overflow: hidden：动画期间主区被推出布局槽，盒子右缘会超出窗口，
+   不裁的话 document 上会冒横向滚动条 */
+.app { display: flex; height: 100vh; position: relative; overflow: hidden; }
+
+/* ===== 左侧栏 ===== */
+/* 收起动画 = 抽屉式：**侧栏脱离 flex 流**（绝对定位），自己 translateX 滑出去；
+   主区靠 margin-left 铺开。两边同一条 easing、同一个时长，于是：
+     侧栏视觉右缘 = translateX(-W·p) + W = W(1-p)
+     主区左缘     = margin-left          = W(1-p)
+   恒等 —— 每帧都严丝合缝，既不露缝也不压正文。
+   这也是为什么必须脱离流：留在流里的话，位移会让侧栏右缘和主区左缘脱开，
+   要么留一条浅色缝、要么压到正文上（几何上无解，位移只能是 0）。
+   之前试过的两种都各有毛病：
+     · 只滑侧栏 + 负 margin 瞬时生效 → 主区「跳」过去，像没动画；
+     · 宽度动画 → 侧栏文字被挤着重排、冒横向滚动条；
+     · 位移 + 同帧切终态两段式 → 动画结束要换状态，双向都抖。
+   时长 --side-anim 由 JS 写进行内 style（见 App.jsx 的 SIDE_ANIM_MS），
+   CSS 和 JS 的兜底计时器共用一个值，不会漂。
+
+   ── 悬浮卡 ────────────────────────────────────────────────
+   .side 的**几何完全不变**：还是 absolute 贴左边、上下顶到窗口沿、
+   收起时整条 translateX(-100%) 滑出去。主区靠 margin-left 铺开的那套
+   恒等关系也不动。
+
+   变的只是「画什么」：.side 自己不铺底色（否则内缩那圈空隙会被底色吃掉，
+   卡片就看不见了），改由 ::before 在它内部画一张内缩的圆角卡。
+   所以收起时是**整张卡跟着一起滑出去**，不需要任何额外的动画分支。 */
+.side {
+  position: absolute; top: 0; left: 0; bottom: 0;
+  /* z-index 32，不是 1、也不是 30：
+     ① 不能是 1 —— transform 会自动创建层叠上下文，把侧栏内部的 z-index 全关在
+        这个上下文里。知识库下拉挂在 .side-foot 里，而全屏的 .kb-backdrop 是 29，
+        侧栏给 1 的话 backdrop 反而盖在菜单上，整个下拉一个都点不动（抽屉版引入的回归）。
+     ② 必须**压过顶栏的 31** —— 收起时是整张卡横着滑出去，滑到一半它盖在
+        主区上面，而主区那会儿已经有顶栏了。30 < 31 的结果是侧栏从顶栏底下穿过去，
+        拖到上半部分直接抓不住。顶栏要压过 .kb-backdrop(29)，侧栏要压过顶栏(31)，
+        所以 32 是这条链上唯一说得通的值。
+     顶栏和各种浮层（100~320）仍在它上面 —— 顶栏 31 < 32 < 100。 */
+  z-index: 32;
+  width: var(--side-w, 280px);
+  /* 底色和右边框都交给 ::before 那张卡。边框必须去掉：原来那条 1px 竖线
+     画在 .side 的右缘（也就是卡片右缘往右 6px 的地方），和卡片的白边重影。 */
+  background: transparent;
+  border-right: none;
+  /* 内缩量 = 卡片 inset，四个方向一致。内容因此落在卡片**里面**，
+     而不是像原来那样顶到 .side 的边。 */
+  display: flex; flex-direction: column; padding: var(--side-inset);
+  /* 这里原来有 overflow:hidden，是为悬浮卡加的 ::before 让出来的：
+     它裁的是 **.side 的方框**，不是圆角卡，所以卡片的 box-shadow 会被它切掉
+     （卡片只内缩 6px，投影需要往外扩 8px 左右，一裁就在卡片边缘留一道硬边）。
+     实测撤掉后没有回归：收起动画全程 sideW 恒定、侧栏右缘与主区左缘的间距恒为 0、
+     内容横向不溢出（contentMaxRight 始终比 .side 右缘内缩 6px），
+     右键菜单 / 知识库下拉 / 图标选择器的位置尺寸也完全一致。
+     真要防溢出的话该裁的是「内容相对卡片」，
+     但内容是 .side 的子元素、卡是 ::before，overflow 本来就管不到卡片那层圆角。 */
+  overflow: visible;
+  transform: translateX(0);
+  transition: transform var(--side-anim, .3s) cubic-bezier(.4, 0, .2, 1),
+              visibility 0s;
+}
+/* 悬浮卡本体：底色 / 圆角 / 白边 / 投影全在这一层。
+   z-index:-1 让它待在 .side 的层叠上下文里、排在内容之下 —— .side 有 transform，
+   本身就是个层叠上下文，所以 -1 不会把卡片甩到 .app 底下去。
+   pointer-events:none 是多余的保险（::before 本来就不接收事件），但写上更表意。 */
+.side::before {
+  content: "";
+  position: absolute;
+  inset: var(--side-inset);
+  border-radius: var(--side-radius);
+  background: var(--side-card);
+  /* 白边：在白底窗口上，白描边的作用不是「画边」而是「切边」——
+     投影再淡，卡片和周围白底之间也有明确的分界（参考图就是这个观感）。
+     2px 不是随手写的：::before 命中的是 content-box（全局那条 `* { box-sizing }`
+     **不匹配伪元素**），所以描边是往卡片内部长的 ——
+     卡片外轮廓仍停在 inset 上，加粗描边不会把卡片撑大，也不会和内容打架。 */
+  border: 2px solid var(--side-ring);
+  box-shadow: var(--shadow-float);
+  z-index: -1;
+  pointer-events: none;
+}
+.side.collapsed {
+  transform: translateX(-100%);
+  /* 不能只靠移出屏幕：离屏的按钮仍能被 Tab 聚焦 */
+  visibility: hidden;
+  /* visibility 延迟到滑完再关，否则内容在动画中途就被切掉（会闪一下） */
+  transition: transform var(--side-anim, .3s) cubic-bezier(.4, 0, .2, 1),
+              visibility 0s var(--side-anim, .3s);
+}
+/* 侧栏拖拽热区：**纯命中区，不画任何东西**。
+   原来这里有两种视觉提示——一条加粗竖线（linear-gradient）和一撮六点抓手 ——
+   都去掉了，只留 cursor: col-resize。
+   理由：卡片右边框本来就是一条看得见的白边，再叠一根灰杠/一撮点，
+   说的是同一件事却画了两遍，而且横跨整个高度、永远是侧栏里最重的一笔。
+   定位在 JSX 里（inline left），要跟着 --side-inset 对齐卡片边框。 */
+.side-resizer {
+  position: absolute; top: 0; bottom: 0; width: 16px; z-index: 40;
+  cursor: col-resize; touch-action: none;
+}
+
+/* ===== 收起侧栏后，hover 顶栏的展开按钮把它「浮」出来（2026-10-18）=====
+ *
+ * 这套曾经有过、后来按用户要求删了，理由是「悬停就滑出半屏，既吵又容易误触」。
+ * 恢复时把那个理由解掉了：触发点是顶栏那个**看得见的按钮**（最初做的是
+ * 「窗口左缘一条 10px 命中条」，看不见摸不着，用户指正说应该 hover 按钮），
+ * 再加 JS 那边的 260ms 打开延迟 —— 指针扫过顶栏根本等不到，不会误触。
+ *
+ * 浮出来时**脱离 flex 流**（position:absolute），不把正文挤走：
+ * 展开态的侧栏占的是布局槽，这里不能占，否则正文会在指针进出的瞬间左右跳。
+    代价是收起态下 .main.collapsed 的 margin-left 为 0，顶栏横跨整个窗口宽度、
+    和这张浮出来的卡片重叠 —— 所以下面那条 z-index 33 是必须的，不是可选的。 */
+.side.peeking {
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--side-w, 280px);
+  transform: translateX(0);
+  /* .side.collapsed 的 visibility 是**滑完之后**才切的，浮出来就得当场可见，
+     否则会看到它滑回来又被立刻藏掉。 */
+  visibility: visible;
+  /* z-index 33，**不能**是原来的 20（2026-10-18 用户报「浮出来好像多了一层」）。
+     收起态下 .main.collapsed 的 margin-left 是 0，顶栏那条 48px 的 bar 因此横跨
+     整个窗口宽度，其中左半截正好压在浮出来的侧栏卡片上。顶栏 31 > 浮层 20 的
+     结果是：卡片顶部 48px 被顶栏的不透明底色盖成灰条，卡片自己的那排按钮
+     （新建/收起）整个看不见，浮在上面的反而是顶栏的展开按钮和面包屑 ——
+     看上去就是白卡片上面又盖了一层灰板子。浮层必须压过顶栏。
+     33 而不是更高：顶栏上面还有 kb-backdrop(29，但侧栏本来就压它)、右键菜单
+     (100)、对话框 (150)、toast (200)，浮层插在 31 和 100 之间刚好。 */
+  z-index: 33;
+  /* ⚠️ 原来这里还有 box-shadow + border-radius，两条都要删：
+     ① 阴影 —— 卡片本体（.side::before）已经带了同一个 --shadow-float。
+        画在 .side 上等于在卡片**外侧 6px**（--side-inset）再套一圈同样的投影，
+        浮层右边就多出一道悬空的暗边，看着像卡片后面还垫着第二张板。
+     ② 圆角 —— .side 自己是透明的，border-radius 什么都不裁，只是让人误以为
+        这里有一张比卡片大的圆角矩形。卡片自己的圆角在 ::before 上（--side-radius），
+        和固定态完全一致。 */
+}
+/* 收起态那一排顶部按钮淡出过，浮出来时要淡回来 —— 浮层里它们是主要操作入口了 */
+.side.peeking .side-top { opacity: 1; transition: none; }
+/* 浮层模式下拖拽条要压在浮层（z-index 50）之上，且只覆盖浮层那截高度，
+   不然拖到顶栏区域会误触发 */
+
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing * { cursor: col-resize !important; }
+/* 顶部操作条：左=收起侧栏，右=新建笔记（同一行，两头对齐） */
+/* 顶部贴到窗口最上沿（无标题栏）；has-tl = 真桌面端有红绿灯，整排右移让开 */
+.side-top { display: flex; align-items: center; gap: 2px;
+  padding: 2px 8px 4px var(--indent-first);
+  /* 这一排的纵向位置**从顶栏高度推**，不再写死。
+     按钮中心 = .side 的 padding-top(10) + 本 margin + 本 padding-top(2) + 按钮高/2(13)
+              = 25px + margin
+     要它和顶栏中心（--topbar-h / 2）落在同一条水平线上：
+              margin-top = --topbar-h / 2 − 25px
+     代入改动前的 --topbar-h:58 → 4px，和那时候写死的 4px 完全一致
+     —— 说明这个公式没有跑偏，是从既有事实反推出来的，不是编的。 */
+  margin-top: calc(var(--topbar-h) / 2 - 25px); }
+/* 收起时这一排要淡出，不能只靠 visibility。
+   .side.collapsed 的 visibility 是在滑完后才切的（transition 延迟 --side-anim），
+   期间侧栏整体 translateX(-100%) 向左平移 —— 而按钮是右对齐的（margin-left:auto），
+   于是它们从窗口右侧一路横扫到左缘，正好横穿那三个红绿灯（trafficLightPosition y=24，
+   和这一排的纵向范围完全重叠），观感很脏。
+   让它在扫到红绿灯之前就淡完：淡出取滑行时长的 .35（约 0.1s），
+   而按钮进入红绿灯区（x<66px）大约发生在滑行 0.1s 前后，正好错过。 */
+.side-top {
+  opacity: 1;
+  transition: opacity calc(var(--side-anim, .3s) * .35) ease-out;
+}
+.side.collapsed .side-top { opacity: 0; }
+/* ⚠️ 这里原来有 `.side-top.has-tl { padding-left: 66px }` 让位给红绿灯，**是死代码**：
+   .side-top 里只有 .side-top-ops 一个子元素，而它是 `margin-left: auto` 右对齐的 ——
+   左内边距缩不缩内容盒，右边缘都不动，渲染结果逐像素相同。
+   真正起作用的是上面那条 opacity 淡出（侧栏滑走时按钮会横扫过红绿灯区，
+   先淡完就不脏了）。数字一改反而会让人以为「让位量 = 66」是条规矩。 */
+.side-top-ops { display: flex; align-items: center; gap: 16px; margin-left: auto; }
+
+/* 第二行长条搜索：图标 + 快速搜索 + ⌘K 提示，整条可点 */
+/* 这一行是**次要入口**（真搜索是 ⌘K 弹出来的面板），原来却是侧栏顶部最实的
+   一块：占满宽度、28px 高、还带底色和 ⌘K 角标，比下面所有内容都抢眼。
+   收到 26px、圆角 6px、角标描边转淡。 */
+.side-search {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 var(--indent-first) 6px;
+  padding: 0 6px 0 8px; height: 26px;
+  border: none; border-radius: var(--r-md); background: var(--hover-soft);
+  color: var(--muted); cursor: pointer;
+  transition: background .12s ease;
+}
+.side-search:hover { background: var(--row-hover); }
+/* 鼠标点它只是开面板，别留浏览器默认描边；键盘 Tab 过去才给焦点圈 */
+.side-search:focus { outline: none; }
+.side-search:focus-visible { box-shadow: 0 0 0 2px var(--focus-ring); }
+.ss-icon { display: inline-flex; flex: 0 0 auto; }
+.ss-icon svg { width: 14px; height: 14px; }
+.ss-input {
+  flex: 1; min-width: 0; border: none; outline: none; background: none; padding: 0;
+  font: inherit; font-size: 13px; color: var(--ink);
+}
+.ss-input::placeholder { color: var(--muted); }
+/* ⌘K 角标：只是提示，不可选 */
+.ss-kbd {
+  flex: 0 0 auto; font: 500 11px/1 var(--font-ui); color: var(--faint);
+  border: 1px solid var(--line); border-radius: var(--r-sm); padding: 2px 4px;
+  background: rgba(255, 255, 255, .6); user-select: none;
+}
+.ss-clear {
+  flex: 0 0 auto; width: 18px; height: 18px; padding: 0; border: none; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.ss-clear:hover { background: var(--hover); color: var(--ink); }
+.ss-clear svg { width: 13px; height: 13px; }
+/* 侧栏顶部的两个按钮（新建笔记 / 收起侧栏）是整条侧栏里**最深**的图标 ——
+   它们是全局级操作，不该和下面一排条目图标混在同一档。
+   深度和条目图标（--icon-dim）取同一档，形成「操作 > 内容」的层级。 */
+.icon-btn {
+  width: 26px; height: 26px; flex: 0 0 26px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--icon-dim);
+  cursor: pointer; border-radius: 6px;
+}
+.icon-btn:hover { background: var(--hover); color: var(--ink); }
+.icon-btn.on { background: var(--hover); color: var(--ink); }
+.icon-btn:disabled { opacity: .35; cursor: default; background: none; }
+/* flex: 0 0 18px：按钮是 flex 容器，svg 作为 flex item 可能被压缩，钉死保险 */
+.icon-btn svg { width: 18px; height: 18px; flex: 0 0 18px; }
+
+/* 分组标题（最近 / 笔记 / 其它）：可折叠。
+
+   层级原来做不出来，根因是它和条目比**两个维度同时偏小**：12px vs 14px、
+   --muted vs #6b6a65。字号一小字形就细、笔画就淡，扫视时两组是同一片灰，
+   三栏糊成一片、看不出这是三个分组。
+
+   层级原来做不出来，根因是它和条目比**两个维度同时偏小**：12px vs 14px、
+   --muted vs #6b6a65。字号一小字形就细、笔画就淡，扫视时两组是同一片灰。
+
+   改成**不靠「缩小」来表达层级**，只靠留白和字距：
+     · 上 padding 20px / 下 padding 6px：组和组之间留足空白，而组和**自己**的
+       条目挨得紧。视线顺着往下读，自然知道下面那几行属于这个标题；
+     · 字重 600 + 字距 .05em：标题仍然是全侧栏最小最淡的一行文字。
+
+   （组与组之间本来还画了一条发丝线 `.is-grouped::before`，按用户反馈去掉了 ——
+    三栏本身已经靠上下留白分得开，再加一条线反而把侧栏切成一段一段。）
+
+   三角常驻可见（原来 opacity:0，只在 hover 时才冒出来，三栏就分不出开合状态）。
+   静息 --muted 压住存在感，hover 转 --ink。 */
+.section-head {
+  position: relative;
+  display: flex; align-items: center; gap: 4px;
+  font-size: 11.5px; font-weight: 600; color: var(--muted);
+  letter-spacing: 0.05em;
+  padding: 20px var(--row-pad-x) 6px var(--indent-first);
+  cursor: pointer; user-select: none;
+  transition: color .15s ease;
+}
+.section-head:hover { color: var(--ink); }
+.sec-chev {
+  display: inline-flex; margin-left: 1px; color: var(--muted);
+  transition: color .15s ease;
+}
+.sec-chev svg { width: 12px; height: 12px; }
+.section-head:hover .sec-chev { color: var(--ink); }
+/* 「笔记」标题行右端的操作按钮（新建文件夹）：hover 淡入 */
+.section-acts { display: flex; gap: 2px; margin-left: auto; opacity: 0; transition: opacity .15s ease; }
+.section-head:hover .section-acts,
+.section-acts.open-parent { opacity: 1; }
+.section-acts button {
+  width: 22px; height: 22px; border-radius: var(--r-sm); color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: transparent; padding: 0; cursor: pointer;
+  transition: background .1s ease, color .1s ease;
+}
+.section-acts button svg { width: 15px; height: 15px; stroke-width: 2.6; }
+.section-acts button:hover,
+.section-acts button.open { background: var(--hover); color: var(--ink); }
+
+.sec-empty { padding: 2px 16px 8px 32px; font-size: 12px; color: var(--faint); line-height: 1.5; }
+
+
+/* 知识库切换（底部 bar：图标 + 名称 + 下拉箭头，hover 浅灰底） */
+.side-foot {
+  position: relative; z-index: 30;
+  display: flex; align-items: center; gap: 4px;
+  padding: 6px 8px 8px 10px; border-top: 1px solid var(--line);
+}
+.side-foot .kb-row { flex: 1; min-width: 0; }
+.kb-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 5px 8px; border-radius: 6px; cursor: pointer;
+  font-size: 13.5px; font-weight: 500; color: var(--ink);
+}
+.kb-row:hover { background: var(--hover-soft); }
+.kb-avatar {
+  width: 20px; height: 20px; flex: 0 0 20px; border-radius: 5px;
+  /* 反色对：亮色下「深方块 + 浅字」，暗色下「浅方块 + 深字」。
+     ⚠️ 用 var(--on-card) 当前景会在暗色下变成浅字压浅方块，看不见。 */
+  background: var(--ink); color: var(--bg);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.kb-avatar svg { width: 12px !important; height: 12px !important; }
+/* 设了自定义图标就把那块深色圆角底撤掉，**color 也要跟着撤**：
+   .kb-avatar 原本是「深底 + 浅字」的反色对（给白色描边的默认书本用），
+   只撤背景不撤 color 的话，svg 会被染成白色压在浅色侧栏上 —— 看不见。
+   emoji 本来就有自己的彩色字形，撤 color 正好。
+   「跟随主题」交给 --ink：线框版这种 currentColor 图标在亮暗下都可见。 */
+.kb-avatar.em { background: transparent; color: var(--ink); }
+.kb-avatar .ic-emoji { font-size: 12px; line-height: 1; }
+.kb-row .kb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kb-row .kb-caret {
+  display: inline-flex; flex: 0 0 auto; color: var(--muted);
+}
+.kb-row .kb-caret svg { width: 12px; height: 12px; }
+.kb-row.open .kb-caret { transform: rotate(90deg); }
+/* 底部弹层一律向上弹出 */
+.kb-drop {
+  position: absolute; bottom: calc(100% + 4px); left: 8px; right: 8px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(15,15,15,0.12);
+  padding: 5px; max-height: 320px; overflow-y: auto;
+  /* 淡入 + 轻微上移。弹层是从下方往上弹的，所以 transform-origin 取 bottom，
+     位移也朝下（从下面「长」出来）而不是别的浮层那样从上往下落。 */
+  transform-origin: bottom center;
+  animation: kb-drop-in .15s cubic-bezier(.2,.7,.3,1);
+}
+@keyframes kb-drop-in {
+  from { opacity: 0; transform: translateY(7px) scale(.985); }
+  to   { opacity: 1; transform: none; }
+}
+/* 淡出：挂 .kb-drop-out，由 JS 延时 110ms 才卸载（见 App 里的 closePanel）。
+   同时关掉命中，退场途中点不到里面的条目。 */
+.kb-drop.kb-drop-out {
+  animation: kb-drop-out .11s ease-in forwards;
+  pointer-events: none;
+}
+@keyframes kb-drop-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(4px) scale(.99); }
+}
+/* 操作面板（.ops）：锚在右下角那个四点按钮上，不跟着底栏满宽铺。
+   切库面板铺满是因为它要放「头像 + 库名 + 篇数」这条抬头，得有横向空间；
+   操作面板只有两三行短文本，满宽反而空，而且和切库面板同位置弹出时，
+   用户会以为是同一个菜单换了内容 —— 换锚点 + 换缩放原点，从落点就分得开。 */
+.kb-drop.ops {
+  left: auto; right: 6px;
+  width: max-content; min-width: 168px; max-width: 240px;
+  transform-origin: bottom right;
+  /* 条目左对齐，右边缘收在那条目末尾，不要拉满 */
+  --kb-x: 10px;
+}
+.kb-empty { padding: 10px var(--kb-x, 6px); font-size: 13px; color: var(--muted); }
+/* 知识库菜单（.kb-menu）：抬头 → 分割线 → 预留菜单项 → 分割线 → 切库列表 → 库操作 */
+/* 弹层内所有 item 的左右内边距统一走 --kb-x：
+   面板自身内边距 6 + item 自身 6 = **内容距面板边缘 12px**。
+   之前是三套值：.kb-head 12px / .kb-item 10px / .kb-opt（.kb-list 4px + 自身 10px = 14px），
+   三行文字的起始竖线对不齐；hover 底色也一个满宽、一个内缩 4px。
+   改成统一变量之后，所有行的内容竖线和右端（✓ / 操作按钮）都落在同一条线上。 */
+.kb-menu { padding: 0 var(--kb-x, 6px); max-height: 420px; --kb-x: 6px; }
+/* 抬头：图标在左，右侧一列竖排「名称 / 篇数」，整块居左 */
+.kb-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px var(--kb-x, 6px) 10px;
+}
+.kb-head .kb-avatar {
+  width: 40px; height: 40px; flex: 0 0 40px; border-radius: 10px;  /* 比侧栏那枚大 2 倍 */
+}
+.kb-head .kb-avatar svg { width: 24px !important; height: 24px !important; }
+.kb-head .kb-avatar .ic-emoji { font-size: 36px; }
+/* 抬头的图标 = 「改知识库图标」入口。.kb-head 整块不可点，得让图标单独成为 button；
+   button 的浏览器默认底色/边框全要清掉，否则 40px 的方块里套一个灰底按钮。 */
+.kb-av-btn {
+  flex: 0 0 auto; padding: 0; border: none; background: transparent;
+  border-radius: 10px; cursor: pointer; line-height: 0;
+  transition: background .12s ease;
+}
+.kb-av-btn:hover { background: var(--hover-soft); }
+.kb-head .kb-text { min-width: 0; text-align: left; }
+.kb-head .kb-name {
+  display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 14px; font-weight: 600; color: var(--ink);
+}
+.kb-head .kb-total { display: block; margin-top: 3px; font-size: 11.5px; color: var(--faint); }
+.kb-divider { height: 1px; margin: 0 var(--kb-x, 6px); background: var(--line); }
+.kb-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  margin: 2px 0; padding: 7px var(--kb-x, 6px); font-size: 14px; font-family: inherit; text-align: left;
+  color: var(--ink); background: transparent; border: none;
+  border-radius: 6px; cursor: pointer;
+  transition: background-color .1s ease, color .1s ease;
+}
+.kb-item:hover { background: var(--hover-soft); }
+.kb-item svg { width: 14px; height: 14px; flex: 0 0 14px; }
+.kb-item.link { color: #2f6fdb; }
+.kb-item.link:hover { background: rgba(47,111,219,0.08); }
+.kb-item.danger { color: var(--danger); }
+.kb-item.danger:hover { background: rgba(224,62,62,0.08); }
+.kb-item:disabled { color: var(--faint); cursor: default; background: none; }
+/* 列表容器只留纵向内边距：横向那 4px 会把 .kb-opt 的内容竖线多推 4px，
+   和上面 .kb-item 对不齐（12 vs 16）。hover 底色也跟着统一成满宽。 */
+.kb-menu .kb-list { padding: 4px 0; }
+.kb-opt {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px var(--kb-x, 6px); border-radius: 6px; font-size: 14px;
+  /* 没激活的知识库淡一档，用的是 .node .row 那支 --item（--ink 和 --muted 的中值）：
+     和侧栏条目同一支，侧栏里「什么没选中」是统一的一套视觉语言，
+     不必再靠高亮底色去说明「当前是哪个」。hover / 当前库才回到 --ink。 */
+  cursor: pointer; color: var(--item);
+}
+.kb-opt:hover { background: var(--hover-soft); color: var(--ink); }
+.kb-opt.cur { color: var(--ink); }
+.kb-opt.cur .kb-name { font-weight: 600; }
+.kb-opt .kb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 列表项的知识库图标（后续可按库自定义，取值见 App.jsx 的 kbIcon） */
+.kb-opt /* 失效的知识库：目录被删/移走。要**一眼看得出**，不能只是「点了没反应」——
+   后端不再悄悄把空目录建回来，所以这里的标记是唯一让用户知道出事了的地方。 */
+.kb-opt.missing { cursor: default; }
+.kb-opt.missing .kb-name { color: var(--muted); text-decoration: line-through; }
+.kb-opt.missing .kb-opt-icon { opacity: .45; filter: grayscale(1); }
+.kb-check-warn {
+  font-size: 12px; font-weight: 700; color: var(--danger);
+  display: flex; align-items: center; justify-content: center;
+}
+/* 失效库的「移除」：hover 才显形，平时不占视觉。失效库点不动、也切不过去，
+   没有这个按钮就等于永远清不掉（见 App.jsx 里 removeRoot 的注释）。 */
+.kb-opt .kb-drop {
+  flex: 0 0 14px; width: 14px; height: 14px; padding: 0; border: none; border-radius: 4px;
+  background: none; color: var(--muted); cursor: pointer;
+  opacity: 0; transition: opacity .12s;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.kb-opt.missing:hover .kb-drop { opacity: 1; }
+.kb-opt .kb-drop:hover { background: var(--hover-soft); color: var(--danger); }
+.kb-opt .kb-drop svg { width: 14px; height: 14px; }
+
+.kb-opt-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; flex: 0 0 18px; color: var(--muted);
+}
+.kb-opt.cur .kb-opt-icon { color: var(--ink); }
+.kb-opt .kb-opt-icon svg { width: 14px !important; height: 14px !important; }
+.kb-opt .kb-opt-icon .ic-emoji { font-size: 14px; }
+/* emoji 是彩色字形，改 color 染不淡，只能压透明度 ——
+   不压的话用 emoji 的库看着和当前库一样重，「没激活」的层次就丢了。 */
+.kb-opt:not(.cur):not(:hover) .kb-opt-icon .ic-emoji { opacity: .5; }
+/* ✓ 贴最右；非当前库时也占住这 14px，勾选列不会因为「当前库 / 其它库」而左右抖动 */
+.kb-opt .kb-check { display: inline-flex; align-items: center; color: var(--ink); flex: 0 0 14px; }
+.kb-opt .kb-check svg { width: 14px; height: 14px; }
+.kb-backdrop { position: fixed; inset: 0; z-index: 29; }
+
+/* 搜索框（浅灰圆角 + ⌘K 提示 + 一键清空） */
+.search-wrap { position: relative; margin: 6px 12px 4px; }
+.search-wrap .mag { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--muted); display: inline-flex; }
+.search-wrap .mag svg { width: 13px; height: 13px; }
+.search {
+  width: 100%; padding: 6px 28px 6px 29px; font-size: 13px; font-family: inherit;
+  border: 1px solid transparent; border-radius: 6px; background: var(--hover-soft); outline: none;
+  color: var(--ink);
+}
+.search::placeholder { color: var(--muted); }
+.search:focus { background: #fff; border-color: var(--line-strong); }
+.search-clear {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--muted); cursor: pointer;
+  border-radius: 5px; padding: 0;
+}
+.search-clear:hover { color: var(--ink); background: var(--hover); }
+.search-clear svg { width: 12px; height: 12px; }
+/* ⌘K 角标 */
+.kbd {
+  position: absolute; right: 7px; top: 50%; transform: translateY(-50%);
+  font-family: inherit; font-size: 10.5px; line-height: 1.5; color: var(--faint);
+  border: 1px solid var(--line-strong); border-radius: 4px; padding: 0 4px;
+  pointer-events: none;
+}
+
+.tree { flex: 1; min-height: 0; overflow-y: auto; padding: 0 6px 8px; }
+.tree-hint { font-size: 11px; color: var(--muted); padding: 4px 10px 6px; }
+.empty-row {
+  /* ⚠️ 下面那条 svg 以前没被限尺寸（2026-06 用户报「新建第一篇笔记的按钮非常巨大」）：
+     .empty-row 是 flex 容器，里面的 svg 默认按 300×150 的替换尺寸铺开再被 flex 压缩，
+     实际渲染到 **159×159**，整行被撑到 169px 高，一个 + 号占了半个侧栏。
+     根因是尺寸规则**逐个调用点各写各的**（.icon-btn svg / .kb-item svg / .expand-btn svg…），
+     48 处 inline svg，漏一处就出这个现象。已加全局兜底（见文件开头那段）。 */
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--muted); padding: 5px 10px; cursor: pointer; border-radius: 5px;
+}
+.empty-row:hover { background: var(--hover-soft); color: var(--ink); }
+
+.node .row {
+  /* 落点那两条线是 absolute 定位的（不能用 border，见下面 .drop-before 那段），
+     这里不给定位父级的话，它们会跑到最近的定位祖先上去 —— 整个列表的顶端。 */
+  position: relative;
+  /* 图标和文字之间留宽一点：5px 太挤，图标几乎贴着字 */
+  /* 内边距 4 -> 2：图标盒子从 18 涨到 24，行高只从 28 变成 30 */
+  display: flex; align-items: center; gap: 9px;
+  padding: 2px var(--row-pad-x); margin: 1px 0;
+  border-radius: var(--r-md); cursor: pointer; font-size: 14px;
+  white-space: nowrap; overflow: hidden;
+  /* 未选中的条目比正文淡一档，但别用 --muted（#9b9a97，太灰了）；
+     取 --ink(#37352f) 和 --muted 的中值，hover / 激活才回到 --ink */
+  color: var(--item);
+}
+.node .row:hover { background: var(--row-hover); color: var(--ink); }
+.node .row.active { background: var(--row-active); color: var(--ink); }   /* 高亮：不加粗，字色回到原来的深度 */
+
+/* ---- 拖动落点（#6）----
+   两种落点必须给出**能一眼分辨**的提示，因为处理方式完全不同：
+     · drop-before / drop-after：同层重排，一条细线，不动文件
+     · drop-into：搬进这个文件夹，整行染色 —— 会写盘，值得更重的一声提示
+   线用 ::before / ::after 而不是 border：border 会把行的盒子撑高 2px，
+   拖动过程中整棵树跟着抖。 */
+.node .row.drop-before::before,
+.node .row.drop-after::after {
+  /* left 用 --row-indent（FileTree 按 depth 算好写进来的，和这一行的 paddingLeft 同值），
+     横线才会跟着缩进走 —— absolute 定位不吃 padding，不给这个数它永远顶在最左边。
+     没给 --row-indent 的调用方（比如别的 .row）退回 8px。 */
+  content: ""; position: absolute;
+  left: calc(var(--row-indent, 8px) + 4px); right: 8px; height: 5px;
+  /* 照抄编辑器那条落点线的观感（`.crepe-drop-cursor`：
+     `color-mix(in srgb, --crepe-color-outline, transparent 50%)` + `opacity: .5`）——
+     同样是「主线色兑淡」。原来这里直接用实心 --ink，压在行上像一根黑棍。
+     3px 而不是 2px：兑淡之后要靠粗细把存在感补回来。
+     color-mix 前面留一条 --muted 兜底 —— 不支持它的引擎会整条丢弃，
+     结果是**看不见的落点线**，比不好看更糟。 */
+  background: var(--muted);
+  /* 24%：用户连着两次说「还是太深」（先是实心 --ink，再是 40%）。
+     编辑器那条 `.crepe-drop-cursor` 是 outline 兑淡 50% 再 opacity .5 ≈ 25%，
+     这里对齐到那个量级 —— 粗细和浓淡是一对：5px 的线要配淡色才不会压住行。 */
+  background: color-mix(in srgb, var(--ink) 24%, transparent);
+  border-radius: 999px; pointer-events: none;
+}
+/* ⚠️ 两条线必须落在**同一个 y** 上。
+   相邻两行之间有 1px 折叠 margin（N 下边 1px 和 N+1 上边 1px 合并成一个），
+   原来 before 是 -1px、after 是 -1px，两条线正好差那 1px ——
+   5px 粗的线错开 1px，看起来就是**两条挨得极近的线**
+   （用户 2026-10-13 报「有两个落点，大概几像素差距」）。
+   改成各 -0.5px：不管当前是 N 的 after 还是 N+1 的 before，
+   画出来的都是「两行之间那条缝的正中」，即使状态抖动同时命中两个也**重合成一条**。 */
+.node .row.drop-before::before { top: -0.5px; }
+.node .row.drop-after::after { bottom: -0.5px; }
+.node .row.drop-into {
+  background: var(--row-active);
+  box-shadow: inset 0 0 0 1.5px var(--ink);   /* 描边往里画，不占布局 */
+}
+/* 悬在「搬不进去」的文件夹上（自己 / 自己的子目录）：不给描边也不给底线，
+   只把光标换成禁止 —— 不给任何「可以放」的暗示就够了，红色叉太吵。 */
+.node .row.drop-invalid { cursor: not-allowed; }
+.node .row.drop-invalid .name { opacity: .45; }
+.node .row[draggable="true"] { cursor: grab; }
+.node .row.dragging { opacity: .4; }
+/* 「最近」是只读快捷入口：没有右键菜单，悬停反馈也弱一档 */
+.node .row.readonly:hover { background: var(--row-hover); }
+.node .row.readonly { cursor: pointer; }
+/* 盒子 24px：自定义图标（<Lucide> 行内 width/height:100%）铺满盒子 = 24x24，
+   默认的文件夹 / 文档图标仍由下面这条 CSS 定在 18px，居中放在 24 的盒子里。
+   盒子必须跟着放大 —— 不然自定义图标会溢出盒子压到文字上（盒子宽度是 flex-basis 定的）。 */
+/* height 也要钉死 24：只给 flex-basis 的话盒子高度是跟着图标走的，
+   设了自定义图标（24）的行和没设的（18）行会差 4px 高，整棵树参差不齐。 */
+.icon { display: inline-flex; flex: 0 0 24px; height: 24px; align-items: center; justify-content: center; }
+/* 18px = 默认图标（文件夹/文档）和**用户自定义图标**的统一尺寸。
+   ⚠️ `!important` 不是偷懒，是没法绕开：自定义图标走 <Lucide>，那个组件把
+   `width/height:100%` 写成**行内样式**（图标选择器的 34px 格子靠它铺满），
+   行内样式压得过任何普通选择器，只有 !important 能盖。
+   不盖的话自定义图标会撑满 24 的盒子、默认图标停在 18px —— 同一列两号大小。 */
+.icon svg { width: 18px !important; height: 18px !important; }
+/* 条目图标的默认色（未设自定义图标时的文件夹 / 文档）。比正文 --ink(#37352f)
+   淡一档但仍属于墨色系 —— 原来用 #b0aea8 太灰，图标看着像禁用状态。
+   ⚠️ 必须用 `> svg` 而不是 ` svg`：目录行里还挂着一个折叠箭头 .fold-chev，
+   写成后代选择器会把它也一起染深（箭头有自己的 --muted 配色，
+   hover 时才出现，被压深就失去「临时浮现」那层意思了）。 */
+.icon.dir > svg { color: var(--icon-dim); }
+.icon.file > svg { color: var(--icon-dim); }
+/* 目录图标 ↔ 折叠箭头交叉淡入：静止显示文件夹，hover 换成 ▸/▾ */
+.icon.dir { position: relative; }
+.icon.dir > svg { transition: opacity .2s ease, transform .2s ease; }
+.fold-chev {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity .2s ease;
+}
+.fold-chev svg { width: 13px; height: 13px; }
+/* 只交叉淡化，不做 scale。之前图标要先缩到 0.6 再消失、箭头再从 0.6 弹回来，
+   两个缩放叠在一条 0.2s 上显得闹；纯淡入淡出反而更安静，也更像「同一个位置换了内容」。 */
+.node .row:hover .icon.dir > svg { opacity: 0; }
+.node .row:hover .fold-chev { opacity: 1; }
+/* 行内操作按钮（目录：＋新建笔记；全部：⋯更多）：hover 淡入，纯图标无质感 */
+.node .row-actions { display: flex; gap: 2px; margin-left: auto; opacity: 0; transition: opacity .1s ease; }
+.node .row:hover .row-actions { opacity: 1; }
+.node .row-actions button {
+  width: 20px; height: 20px; border-radius: 4px; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: transparent; padding: 0; cursor: pointer;
+  transition: background .1s ease, color .1s ease;
+}
+/* 13px 太小：整套已经回到 Lucide 默认的 2px 描边，＋ 和 ⋯ 缩到 13px 就只剩
+   1px 出头的线，几乎看不见（用户反馈）。放大到 15px，并单独把这两枚的描边
+   提到 2.6 —— 行内按钮只有这两种，单独加粗不影响别处。 */
+.node .row-actions button svg { width: 15px; height: 15px; stroke-width: 2.6; }
+.node .row-actions button:hover { background: var(--hover); color: var(--ink); }
+.name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+.rename-form { display: flex; flex: 1; }
+.rename-form input {
+  width: 100%; font-size: 13px; font-family: inherit; padding: 1px 6px;
+  border: 1px solid var(--line-strong); border-radius: 4px; outline: none; color: var(--ink);
+  /* 输入框是「卡片上的一个面」，用 --card 不是 --on-card —— 暗色下 --on-card
+     是浅色，会变成一个白晃晃的输入框。亮色下两者同为 #ffffff，看不出差别。 */
+  background: var(--card);
+}
+/* 抽屉容器。高度 / overflow / transition 全部由 Drawer 组件在 useLayoutEffect 里
+   按行内样式写（每次展开要量自己的 scrollHeight，写死在 CSS 里量不出来），
+   这里只给一个初值兜底，避免首帧闪现。
+   will-change 只在这 220ms 里需要，常驻会白白占一层合成层。 */
+.drawer { overflow: hidden; }
+.children { }
+
+/* 分组内容被收起时，内部不该再吃掉 pointer 事件（比如「其它」收起后，
+   下面的主区靠点击穿透进来的行为会和残留热区打架） */
+.drawer[style*="height: 0px"] { pointer-events: none; }
+
+/* 右键菜单 */
+.ctx-backdrop { position: fixed; inset: 0; z-index: 100; background: transparent; }
+/* 圆角 / 边框 / 投影交给文件末尾「浮层统一」那一段（!important），
+   这里只管定位和尺寸 */
+.ctx {
+  position: fixed; z-index: 100; background: var(--card);
+  padding: 4px; min-width: 150px;
+}
+.ctx > div {
+  display: flex; align-items: center; gap: 8px;
+  /* 14px 和 .kb-item 拉齐 —— 之前这里是 13px，同在侧栏里的两个菜单差 1px */
+  padding: 6px 10px; font-size: 14px; border-radius: var(--r-md); cursor: pointer;
+}
+.ctx > div:hover { background: var(--hover-soft); }
+.ctx > div.danger { color: var(--danger); }
+.ctx > div svg { width: 14px; height: 14px; flex: 0 0 14px; color: currentColor; }
+
+/* ===== 主区 ===== */
+/* 侧栏脱离流之后，主区左边要自己让出 --side-w；收起时让到 0。
+   和 .side 的 transform 必须同一条 easing，否则两条边会错开露缝。 */
+.main {
+  flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  background: var(--bg); position: relative;
+  margin-left: var(--side-w, 280px);
+  transition: margin-left var(--side-anim, .3s) cubic-bezier(.4, 0, .2, 1);
+}
+.main.collapsed { margin-left: 0; }
+/* 固定置顶、不画底边线：滚动只发生在下方的编辑区，topbar 永远不动，
+   背景与编辑区同色（--bg），看起来就是正文往上延伸出去的那一条。
+   试过改成绝对定位 + backdrop-filter 的磨砂玻璃，让正文从底下滚过去 ——
+   已回退：底色和编辑区一样时那条缝根本看不出来，纯属白加一层结构。
+   真要做磨砂得等暗色模式（待做 #12）——亮色底下半透明只会让上面的字和下面的字
+   在同一条 y 上糊成一片。 */
+.topbar {
+  position: sticky; top: 0; z-index: 5;
+  /* 高度不是随手加的：它由**侧栏顶行按钮的垂直中心**反推 ——
+       .side-top 顶 14 + 高 32 → 按钮盒子中心 29
+       要顶栏内容也落在 29 → height = 29 × 2 = 58px
+     这样红绿灯（中心 29.5）/ 顶栏（中心 29）/ 侧栏按钮（中心 29）
+     三个落在同一条水平线上，差 ≤0.5px，肉眼是齐的。
+     align-items:center 已有，按钮和面包屑跟着一起居中，不用各自补 margin。 */
+  height: var(--topbar-h); flex: 0 0 var(--topbar-h);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 16px; gap: 12px;
+  /* ⚠️ 这里**不能**再刷自己的底色（2026-10-15 修「阴影被 topbar 盖掉」）。
+     侧栏那张悬浮卡的投影是 `0 2px 30px`，卡片右缘在 --side-w - 10，
+     投影向右跨过 --side-w 正好落进顶栏那一段（顶栏从 --side-w 起、58px 高）。
+     顶栏自己刷一层不透明白底，就把那截投影盖住了 —— 表现为：
+     **顶栏高度范围内没有阴影、顶栏以下才有**，中间一道横的硬接缝。
+     Chromium 里 .side(32) 本来就压过 .topbar(31)，投影本来就盖在顶栏上、看不出问题；
+     WKWebView（Tauri 壳）里 sticky 顶栏的合成层序不同，顶栏赢了。
+
+     底色交给 `.main`（它本来就是 `background: var(--bg)`，且 z-index 是 auto、
+     稳稳低于 .side 的 32），顶栏透明后投影就能正常画到顶栏那片区域上。
+     视觉零变化：顶栏和主区本来就是同一个颜色，只是一个刷在容器上、一个刷在子元素上。 */
+  background: transparent;
+  transition: padding-left .22s ease;
+}
+/* 顶栏三点菜单。
+   ⚠️ **z-index 必须压过 .kb-backdrop(29)** —— 那块是点击别处关闭的全屏遮罩，
+   panel 一开就铺满视口。顶栏原来是 5，菜单会被遮罩盖住：一个都点不动
+   （和 styles.css 里 .side 那条注释是同一个坑，只是这次是顶栏）。
+   抬到 31：刚好压过 backdrop（30）和侧栏（30），仍在各种浮层（100~320）之下。 */
+.topbar { z-index: 31; }
+
+/* 顶栏底部分隔线：正文**滚动过就出现**，滚回顶部就消失。
+   不区分滚动方向 —— 向上滚时那根线留着，只在回到顶时收掉（2026-10-16 用户选定）。
+   ⚠️ 用 ::after 而不是 border-bottom：border 会把顶栏的盒子**撑高 1px**，
+     而面包屑(18px)/按钮(26px)/红绿灯那几个中心是压在整数和半整数上的
+     （实测全在 24.0），多出的这 1px 会把它们整体下移半个像素、看着没对齐却说不出所以然。
+   ::after 不参与布局，所以它出现/消失时那排东西一动不动。 */
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 1px;
+  background: var(--topbar-line);
+  opacity: 0;
+  transition: opacity .18s ease;
+  pointer-events: none;
+}
+.topbar.scrolled::after { opacity: 1; }
+.tb-right {
+  position: relative; flex: 0 0 auto;
+  display: flex; align-items: center; gap: 8px;
+}
+/* 锁定状态。灰阶胶囊，和设置面板那颗开关同一档 —— 锁定不是错误状态。
+   可点解锁：状态和开关挨着，用户不用再去三点菜单里翻。 */
+.tb-lock {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 22px; padding: 0 8px 0 6px;
+  font-family: inherit; font-size: 11.5px; color: var(--muted);
+  background: var(--hover-soft); border: 1px solid var(--line);
+  border-radius: 999px; cursor: pointer;
+}
+.tb-lock:hover { color: var(--ink); background: var(--hover); }
+.tb-lock svg { width: 12px; height: 12px; }
+
+/* 回收站预览：**顶栏自己不换任何样式**，只换内容。
+   第一版给它加了灰底 + 底边框，想把「预览」这层意思做重一点 —— 结果顶栏和正文之间
+   多出一条线，正是普通顶栏刻意不要的东西（见 .topbar 那句「不画底边线」）。
+   顶栏还是白底、没边框；区分预览靠内容：左边多一段「回收站」、右边是三个动作。 */
+.trash-crumb { flex: 0 0 auto; }
+/* 「回收站」这一段是当前位置，压深一点，和后面那些「原路径」段区分开 */
+.crumb.trash-crumb .seg.on { color: var(--ink); font-weight: 600; }
+.crumb.trash-crumb .seg.on svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 3px; }
+/* 预览条上的三个动作。普通按钮（描边）太重，用无边框的，和顶栏那一排
+   小图标按钮是同一档密度；危险的那个给红字。 */
+.tb-act {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 26px; padding: 0 9px;
+  font-family: inherit; font-size: 12.5px; color: var(--ink);
+  background: transparent; border: 1px solid transparent; border-radius: 6px;
+  cursor: pointer; white-space: nowrap;
+}
+.tb-act:hover { background: var(--hover); }
+.tb-act svg { width: 14px; height: 14px; }
+.tb-act.danger { color: var(--danger); }
+.tb-act.danger:hover { background: var(--danger-soft); }
+.tb-act.ghost { color: var(--muted); }
+.tb-act.ghost:hover { color: var(--ink); }
+.tb-drop {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  min-width: 210px; max-width: 268px;
+  padding: 5px;
+  background: var(--card); border: 1px solid var(--line-float);
+  border-radius: var(--radius-float); box-shadow: var(--shadow-float);
+  transform-origin: top right;
+  animation: tb-drop-in .14s cubic-bezier(.2,.7,.3,1);
+}
+.tb-drop-out { animation: tb-drop-out .11s ease-in forwards; pointer-events: none; }
+@keyframes tb-drop-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.99); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes tb-drop-out {
+  from { opacity: 1; transform: none; }
+  to { opacity: 0; transform: translateY(-4px) scale(.99); }
+}
+.tb-sec {
+  padding: 6px 8px 3px; font-size: 10.5px; font-weight: 600;
+  letter-spacing: .05em; color: var(--faint); text-transform: uppercase;
+}
+.tb-divider { height: 1px; margin: 4px 6px; background: var(--line); }
+.tb-item {
+  position: relative;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--ink);
+  user-select: none; -webkit-user-select: none;
+}
+.tb-lbl { flex: 1; min-width: 0; line-height: 1.35; }
+/* 每行前面的图标。固定 15px 且 flex 不许缩 —— 和设置面板那排图标同规格，
+   否则开关打开 / 关闭时标签会左右跳一下（图标宽度跟着 hidden 变）。 */
+.tb-ic { display: inline-flex; flex: 0 0 15px; color: var(--faint); }
+.tb-ic svg { width: 15px; height: 15px; }
+.tb-item:has(.tb-hit):hover .tb-ic, .tb-sub-wrap:hover > .tb-item .tb-ic { color: var(--muted); }
+.tb-desc { display: block; font-size: 11px; color: var(--faint); line-height: 1.3; }
+/* 整行命中区：真开关只负责画（.set-switch），点击热区铺满整行，点标题也能切。
+   层级要压过 .tb-lbl，否则按钮被文字压住。 */
+.tb-hit { position: absolute; inset: 0; z-index: 1; border: 0; padding: 0; margin: 0; background: none; cursor: pointer; border-radius: 6px; }
+.tb-item:has(.tb-hit):hover { background: var(--hover-soft); }
+.tb-hit:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: 6px; }
+.tb-item .set-switch { position: relative; z-index: 0; }
+/* 预埋项：不响应，标题淡一档，右端标「待做」—— 得让人看出是还没做，不是坏了 */
+.tb-item.off { color: var(--faint); cursor: default; }
+/* locked：开关点不动，但**保留开关的形状**。
+   整行变淡 + 指针默认，光标上就把「这里点不动」说出来（比 disabled 按钮默认
+   那种「变灰但不知道能不能点」清楚）。不写 opacity —— 那样文字会淡到读不清，
+   用 color 降到 faint，图标和描述同步降一档。 */
+.tb-item.locked { color: var(--faint); cursor: default; }
+.tb-item.locked .tb-ic { color: var(--faint); opacity: .6; }
+.tb-item.locked .tb-desc { opacity: .7; }
+/* 动作行（TbItem）：真按钮，整行可点。快捷键提示贴右，灰度压到最淡 */
+button.tb-item.act { width: 100%; border: 0; background: transparent; font-family: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+button.tb-item.act:hover { background: var(--hover-soft); }
+.tb-hint {
+  flex: 0 0 auto; font-size: 11px; color: var(--faint);
+  font-variant-numeric: tabular-nums; letter-spacing: .02em;
+}
+.tb-soon { font-size: 10.5px; color: var(--faint); padding: 1px 5px; border: 1px solid var(--line); border-radius: 4px; }
+/* 带二级菜单的行：末尾一枚向右的箭头，暗示「还有一层」 */
+.tb-sub-wrap { position: relative; }
+.tb-sub-wrap > .tb-item { cursor: default; }
+.tb-chev { display: inline-flex; color: var(--faint); }
+.tb-chev svg { width: 13px; height: 13px; }
+/* 二级子菜单**横向向左**飞出。主菜单贴窗口右缘，往右飞直接飞出屏幕。
+   top:-4px 让它和这一行大致齐平；中间的 6px 缝用 padding 补上 ——
+   指针横穿这段缝时还在 .tb-sub-wrap 的命中区内（子菜单是它的后代），
+   菜单不会中途收起。 */
+.tb-sub {
+  position: absolute; right: calc(100% + 4px); top: -4px;
+  display: flex; gap: 2px; padding: 5px;
+  min-width: max-content;
+  background: var(--card); border: 1px solid var(--line-float);
+  border-radius: var(--radius-float); box-shadow: var(--shadow-float);
+  transform-origin: top right;
+  opacity: 0; visibility: hidden; transform: translateX(6px);
+  transition: opacity .1s ease, transform .1s ease, visibility 0s linear .1s;
+}
+.tb-sub-wrap:hover > .tb-sub,
+.tb-sub-wrap:focus-within > .tb-sub {
+  opacity: 1; visibility: visible; transform: none;
+  transition: opacity .1s ease, transform .1s ease;
+}
+.tb-sub-wrap:hover > .tb-item, .tb-sub-wrap:focus-within > .tb-item { background: var(--hover-soft); }
+.tb-opt {
+  display: flex; align-items: baseline; gap: 1px;
+  padding: 5px 9px; border: 0; border-radius: 5px; background: transparent;
+  font-family: inherit; font-size: 12.5px; color: var(--muted); cursor: pointer;
+}
+.tb-opt:hover { color: var(--ink); background: var(--hover-soft); }
+.tb-opt.on { background: var(--hover); color: var(--ink); font-weight: 600; }
+.tb-opt-u { font-size: 9.5px; opacity: .6; }
+/* 侧栏收起后顶栏贴到窗口最左，红绿灯会压住展开按钮，整条右移让开。
+   让位量 = 红绿灯右缘(--tl-right = 74) + 12px 余量，
+   不再是散落的魔数 —— 和 .side-top 那个 66 一样从同一处算，
+   只是侧栏这个得真让开（展开按钮是实打实的内容），那边不需要。 */
+.topbar.inset { padding-left: calc(var(--tl-right) + 12px); }   /* = 86px */
+/* 兜底：窗口被遮挡时 WebKit 会卡住 CSS 过渡，动画结束后强制落到终态 */
+/* ⚠️ `.main` 也在里面：侧栏整块不渲染时 --side-w 从 280 变 0，
+   .main 的 margin-left 会带着 transition 滑过去 —— 侧栏明明没渲染过，
+   用户看到的却是「侧栏缩回去」。只覆盖 .side/.topbar 时漏了它。
+   （.topbar 也留着是因为它有 padding-left 的过渡，同样要瞬时到位。） */
+.app.no-anim .side,
+.app.no-anim .main,
+.app.no-anim .topbar { transition: none !important; }
+.tb-left { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+/* 侧栏收起后的展开按钮：排在 topbar 面包屑左侧（占位参与布局，不遮挡面包屑） */
+.expand-btn {
+  width: 26px; height: 26px; flex: 0 0 26px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: none; color: var(--muted);
+  cursor: pointer; border-radius: 6px;
+}
+.expand-btn:hover { background: var(--hover); color: var(--ink); }
+.expand-btn.hidden { display: none; }
+/* flex 不能省：按钮是 flex 容器，svg 作为 flex item 会被压缩，
+   指定 20px 实际只渲染 14px（侧栏顶部那几个 .icon-btn svg 同样结构却没被压，
+   但这里实测会，宁可显式钉死） */
+.expand-btn svg { width: 18px; height: 18px; flex: 0 0 18px; }
+.crumb {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--muted); min-width: 0;
+  /* 不折行：.topbar 是固定 58px 高（flex: 0 0 58px），面包屑一旦换行就撑破那条高度、
+   压到下面的正文上。空间不够时压缩中间段（.crumb-mid 的省略号），首末两段保持完整。
+   flex:1 1 auto + min-width:0 是必须的：只写 min-width:0 的话，.crumb 作为 .tb-left
+   的 flex item 仍会按内容撑宽、整条溢出到窗口外，结果是中间段省略号生效了、
+   末段却被窗口裁掉（两个问题一起出现，容易误判成没生效）。 */
+  flex: 1 1 auto; flex-wrap: nowrap; overflow: hidden;
+}
+/* 每一段都是 inline-flex；flex:0 0 auto 让它们**不参与收缩**，
+   需要让位的只有 .crumb-mid 那一组（见下）。不钉死的话窄窗口下所有段一起被压扁。 */
+.crumb .crumb-part { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+/* 知识库名（.crumb 的第一个直接子元素）同理，它是首段，钉死不收缩 */
+.crumb > .seg { flex: 0 0 auto; }
+.crumb .seg, .crumb .cur { white-space: nowrap; }
+.crumb .csep { color: var(--faint); }
+.crumb .cur { color: var(--ink); font-weight: 500; }
+.crumb svg { width: 15px; height: 15px; color: var(--muted); flex: 0 0 15px; }
+/* 面包屑上的自定义图标：和树里的 .icon 同尺寸，视觉上不跳 */
+.crumb .crumb-ic { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 15px; }
+.crumb .crumb-ic svg { width: 15px !important; height: 15px !important; }
+
+/* 外部文件：额外的「外部文件」角标，其余行为和知识库面包屑一致 */
+/* flex-shrink 必须是 0 1 auto：1 1 auto 会在有余量时把中间段撑开，
+   把末段顶到最右，路径就跟顶栏脱节了 */
+.crumb .crumb-mid {
+  flex: 0 1 auto; min-width: 0; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.crumb .mid-item { white-space: nowrap; }
+/* 中间段里的分隔符要自己带间距：首段那边是靠 .crumb-part 的 gap:6px，
+   而 .mid-item 不是 .crumb-part，不吃那条 gap，不补的话中间几段会挤成一坨
+   「/tmp/exttest/工作/2026年」，和前面「private / tmp」那种留白对不上。 */
+.crumb .mid-item .csep { margin: 0 6px; }
+/* 首段都没了才轮到中间段收缩；整体再窄就交给 .crumb.ext 的 overflow 裁 */
+.save { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.save::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); }
+.save.dirty { color: var(--ink); }
+.save.dirty::before { background: var(--warn); }
+
+/* 保存状态：编辑区右下角浮动，不随正文滚动 */
+/* 右下角状态条：「已保存 / 保存中」+ 字数统计。
+   之前这一行是**整个界面里唯一裸奔的元素** —— 文本直接贴在窗口右下角，
+   没有任何容器。侧栏改成悬浮卡之后它显得更突兀了（旁边就是一张有圆角有投影的卡）。
+   给它一个和卡片同语言的小胶囊：同圆角、同白边、同投影，只是更小一档。 */
+.save-float {
+  position: absolute; right: calc(var(--inset-r) + var(--sbw)); bottom: var(--side-inset); z-index: 6;
+  display: flex; align-items: center; gap: 10px;
+  height: 26px; padding: 0 12px;
+  font-size: 12px; color: var(--muted);
+  background: var(--card);
+  border: 1px solid var(--line-float);
+  border-radius: 999px;                 /* 胶囊：状态是个小标签，不是内容 */
+  box-shadow: var(--shadow-float-sm);
+  pointer-events: none; user-select: none;
+}
+/* 保存状态的小圆点。不再用 ::before —— 胶囊里已经有左侧内边距，
+   再用伪元素顶出去会把「已保存」两字往右推。 */
+.save-float::before {
+  content: ""; width: 6px; height: 6px; flex: 0 0 6px;
+  border-radius: 50%; background: var(--ok);
+}
+.save-float.dirty { color: var(--ink); }
+.save-float.dirty::before { background: var(--warn); }
+/* 关掉「保存状态」后剩下的纯统计：那颗状态点是 ::before，属于已保存那一半，
+   不跟着收掉的话胶囊左边会剩一颗没有主语的绿点。 */
+.save-float.stats-only::before { display: none; }
+/* 统计成了第一个孩子：前面没有东西可分隔，去掉竖线和左侧留白 */
+.save-float > .doc-stats:first-child { padding-left: 0; border-left: none; }
+/* 字数统计更淡，避免和「保存中」抢注意力；竖线分隔 */
+.doc-stats {
+  color: var(--faint); font-variant-numeric: tabular-nums;
+  padding-left: 10px; border-left: 1px solid var(--line);
+}
+
+/* ===== 大纲轨道 =====
+   右侧一条细轨，每条横线是一个标题，**所有线一样粗**（--olr-lh，2px），
+   只用长度编码层级（34/24/16/10）。
+   轨道和大纲面板是**互斥**的：两块绝对定位完全重叠、都贴顶端，
+   鼠标进轨道 → 轨道淡出、面板淡入；鼠标离开 → 反过来。
+   点线或点条目 = 平滑滚到该标题。
+   容器 pointer-events:none，只让轨道和面板吃指针 —— 否则这 230px 的透明区
+   会盖住正文，鼠标划过去点不到字。 */
+.olr {
+  /* 上下各留 25%，中间占 50%。用 top:25% + height:50% 而不是 top:50% +
+     translateY(-50%)：后者会在 .olr 上留一个 transform，而面板展开时
+     .olr-list 自己也要用 transform 做位移，父级带 transform 会多建一层
+     合成层，没必要。 */
+  position: absolute; top: 25%; height: var(--olr-h);
+  /* 右缘 = --inset-r + --sbw（当前 sbw=0，即贴窗口右缘 10px，和右下角胶囊同口径）。
+     .olr-rail 和 .olr-list 都是 right:0，所以这一条同时管住刻度线和面板。 */
+  right: calc(var(--inset-r) + var(--sbw));
+  width: var(--olr-panel-w); pointer-events: none; z-index: 4;
+}
+/* 大纲常驻（showOutline 开且 showRail 关）：两块不能重叠了 —— 面板要占住整块地方，
+   轨道挪到它上面改成纵向堆叠。比例 2 : 3：轨道是 2px 的刻度，密集一点也认得出；
+   面板是 27px 一行的文字，得留够高度才放得下三四条。
+   align-items:flex-end 让窄轨道（~40px）贴右缘，和宽面板（230px）对齐。 */
+.olr.pinned {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: var(--olr-gap);
+}
+.olr.pinned > .olr-rail {
+  /* min-height:0 必须写：flex 子项默认 min-height:auto，面板内容一多
+     轨道会被顶成 0 高度、最后几条刻度整批消失（而 .olr 的 50% 上限还在，
+     看不出是被谁挤的）。 */
+  position: relative; flex: 2 1 0; min-height: 0;
+}
+.olr.pinned > .olr-list {
+  position: relative; flex: 3 1 0; min-height: 0;
+  pointer-events: auto; opacity: 1; transform: none;
+}
+.olr-rail {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  /* 宽度 = 最长的线 + 热区多出来的 6px（右缘留白归 .olr 的 right 管） */
+  width: calc(var(--olr-lw-max) + 6px);
+  /* 上下留白（PAD_TB）由 JS 算进槽位偏移里，没写 padding：
+     tick 是绝对定位，padding 对它无效。右侧留白走下面 tick 的 right。 */
+  pointer-events: auto;
+  /* hover 时轨道让位给大纲面板：线淡出，展开的条目在原位接管。
+     当前项的高亮位置不变 —— 用户看到的是「刻度展开成目录」，不是旁边多了个东西。 */
+  transition: opacity .1s ease;
+}
+/* hover 互换**的前提是大纲面板在 DOM 里**。用 :has() 把这个前提写进选择器，
+   而不是靠 React 那边同时渲染两者 —— 两者一旦走散就是这个 bug：
+   面板被关掉后这条规则照样命中，导航条一 hover 就淡出，而没有面板把它淡回来，
+   表现是「平时看得见、鼠标一扫就没了，但还点得到」（opacity 0 照样吃事件）。
+   改成 :has(.olr-list) 之后，面板在才互换，不在就完全不动。
+   :not(.pinned) 是因为常驻态下面板一直亮着，轨道要是再淡出去就没人管了。 */
+.olr:not(.pinned):has(.olr-list):hover > .olr-rail { opacity: 0; pointer-events: none; }
+/* tick 是**槽**：height 给了它整段的高度，那是点击热区。
+   里面的 <i> 是看得见的线，只有 --olr-lh 那么粗 —— 槽是排版和命中的，线是画出来的。
+   槽内 y 居中用 flex：线不贴在格的顶部，上下留白对称。 */
+.olr-tick {
+  position: absolute; right: 0;
+  width: calc(var(--w, 24px) + 6px);   /* 热区比线宽 6px，两侧各 3px 好点 */
+  padding: 0; border: 0; background: transparent;
+  cursor: pointer; pointer-events: auto;
+  display: flex; align-items: center; justify-content: flex-end;
+}
+.olr-tick > i {
+  /* 所有线一样粗 —— 层级只由长度编码。粗细不参与编码，扫视时就是一把
+     等粗的刻度，不会因为「一级粗、二级细」把视线拉到长短不齐的节奏上。 */
+  width: var(--w, 24px); height: var(--olr-lh); border-radius: 1px;
+  background: var(--faint);
+  transition: background .12s ease, width .14s cubic-bezier(.2,.7,.3,1);
+}
+.olr-tick:hover > i { background: var(--muted); }
+/* 当前标题：线加长到最长那档 + 染深。长度本来编码层级，这一格破例加长
+   是刻意的 —— 当前所在的那一节就该从刻度里跳出来。右边缘和别的线对齐，
+   所以是往左长出去，不会越过轨道边界。 */
+.olr-tick.cur > i { width: var(--olr-lw-max); background: var(--ink); }
+
+/* ===== 迷你模式（2026-10-16）=====
+ * 一条很短的轨（--olr-mini-h，默认 150px），映射的仍然是整篇。
+ * 「短」说的是条子本身，不是它代表的范围 —— 别拿长度去推「这节有多长」。
+ * 高度定长、贴右缘垂直居中；预览卡从 .olr 的左缘往右伸，贴住轨的左边。 */
+.olr.mini { top: 50%; height: var(--olr-mini-h); transform: translateY(-50%); }
+.olr-mini {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  /* 宽度取**波峰**那档（MW_MAX=24）而不是基线那档：轨要装得下最长的那条，
+     而且鼠标要能扫到基线那 8px 的窄条 —— 盒子太窄就只剩峰附近能触发 hover。 */
+  width: calc(var(--olr-mw-max) + 6px);
+  pointer-events: auto;
+}
+.olr-mtick {
+  position: absolute; right: 0;
+  width: calc(var(--w, 8px) + 6px);   /* 和 .olr-tick 一样：热区比线宽 6px */
+  padding: 0; border: 0; background: transparent;
+  cursor: pointer; display: flex; align-items: center; justify-content: flex-end;
+}
+.olr-mtick > i {
+  width: var(--w, 8px); height: var(--olr-lh); border-radius: 1px;
+  background: var(--faint);
+  /* 波峰要能「长出来」，所以宽度过渡要比 .olr-tick 那条更长一点 ——
+     .14s 太快，鼠标划过一列时根本看不清浪是怎么推过去的。 */
+  transition: background .12s ease, width .22s cubic-bezier(.2,.7,.3,1);
+}
+.olr-mtick:hover > i { background: var(--muted); }
+/* 当前标题：**只染深，不加长**（2026-10-16 用户要求「和其余额 item 一样长」）。
+   两个原因：
+   ① 迷你模式的基线只有 8px，加长到 24px 等于把那一格放大三倍，在这么窄的轨上很跳；
+   ② 更要命的是**和 hover 波峰撞了** —— 两者都靠「长」表达，含义就糊了。
+      实测就撞上了：hover 第 5 条时波峰是 24，而当前项（第 4 条）被这条规则
+      钉死在 24，于是出现 `… 15 24 24 21 15 …` —— 两个峰并排，根本看不出哪个是波峰。
+   现在只靠颜色区分当前项。实测：静止时当前项宽度 8（与其它完全一致），
+   hover 时它只是波峰的自然衰减值、**不再被单独顶到 24** ——
+   「达到峰宽的条数」从 2 降到 1，波峰只剩一个。 */
+.olr-mtick.cur > i { background: var(--ink); }
+
+/* 片段预览卡（标题 + 第一行正文）。不是完整大纲 —— 完整大纲在完整模式里，
+   这里再来一份就是同一屏上摆两个功能一样的东西。
+   right 要贴住轨的左边缘（轨宽 = mw-max + 6），再加 6px 缝。 */
+.olr-mcard {
+  position: absolute; right: calc(var(--olr-mw-max) + 12px);
+  width: var(--olr-mcard-w);
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: var(--shadow-float);
+  /* pointer-events:none —— 它压在正文上面，但不拦鼠标，底下的字照样能选中/拖。
+     真要「点预览卡跳转」，得给它 pointer-events:auto 并自己接 onClick，
+     但那会和「鼠标移动 = 换预览」抢同一个 hover，得先想清楚优先级。 */
+  pointer-events: none;
+  animation: olr-mcard-in .13s ease-out;
+}
+@keyframes olr-mcard-in {
+  from { opacity: 0; transform: translateX(4px); }
+  to { opacity: 1; transform: none; }
+}
+.olr-mcard-t {
+  font-size: 12.5px; font-weight: 600; color: var(--ink); line-height: 1.35;
+  /* 标题可能很长，两行封顶：再长就该交给 title 提示条了 */
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.olr-mcard-b {
+  margin-top: 3px; font-size: 11.5px; color: var(--muted); line-height: 1.45;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.olr-list {
+  /* 和轨道完全重叠、都贴顶端（top:0）：大纲的第一条和最高的那根刻度齐平。
+     靠 opacity 在两者间切换，看不出换位。 */
+  position: absolute; right: 0; top: 0; bottom: 0; width: var(--olr-panel-w);
+  display: flex; flex-direction: column;   /* 标题栏钉住，只有下面那条滚 */
+  padding: 0; background: var(--card);
+  border: 1px solid var(--line-float);
+  border-radius: var(--radius-float);
+  box-shadow: var(--shadow-float);
+  pointer-events: none; opacity: 0; transform: translateX(6px);
+  transition: opacity .12s ease, transform .12s ease, pointer-events 0s linear .12s;
+}
+/* 标题栏：固定不跟着内容滚 */
+.olr-head {
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--line);
+}
+.olr-head-t { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.olr-head-i { display: inline-flex; color: var(--faint); }
+.olr-head-i svg { width: 14px; height: 14px; }
+/* 列表本体：可滚，滚动条藏掉（macOS 覆盖式滚动条不占宽，自己画反而碍眼）。
+   上下留白比轨道那几根线宽得多 —— 这里每行是 27px 的文字，不是 2px 的刻度，
+   贴着边框会显得挤。 */
+.olr-scroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 10px 4px 14px;
+}
+.olr-scroll::-webkit-scrollbar { display: none; }
+/* 鼠标在轨道或面板任一处 → 大纲淡入接管。.olr 是两者的共同父级，
+   所以进轨道再移进面板时 :hover 不会断，面板不会中途闪回刻度。 */
+.olr:not(.pinned):has(.olr-list):hover > .olr-list {
+  pointer-events: auto; opacity: 1; transform: none;
+  transition: opacity .12s ease, transform .12s ease;
+}
+.olr-item {
+  display: block; width: 100%; text-align: left;
+  padding: 5px 8px; border: 0; border-radius: var(--r-sm);
+  background: transparent; font-family: inherit; font-size: 12.5px;
+  color: var(--muted); cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background .1s ease, color .1s ease;
+}
+/* 层级往右缩，和轨道上线宽递减同一个道理 */
+.olr-item.lv2 { padding-left: 18px; }
+.olr-item.lv3 { padding-left: 28px; }
+.olr-item.lv4, .olr-item.lv5, .olr-item.lv6 { padding-left: 38px; }
+.olr-item:hover { background: var(--hover-soft); color: var(--ink); }
+.olr-item.cur { color: var(--ink); font-weight: 600; background: var(--hover-soft); }
+/* 多一层 wrapper：给右侧的大纲轨道一个定位父级。轨道必须待在滚动容器**外面** ——
+   放进去它会跟着正文一起滚走。flex 链条原样透传，所以行为和之前一致。 */
+.editor-wrap {
+  position: relative; flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+}
+/* ⚠️ overflow-y 必须是 scroll，不能用 auto（2026-10-28 用户报「多一行出现滚动条，
+   正文往左跳一下」）。原因：正文的左右留白是 clamp(24px, (100% - 720px)/2, 100px)，
+   百分比按这个滚动容器的**内容盒宽度**算 —— auto 时内容一超过一屏就长出 8px
+   滚动条（见 :root 上面的 ::-webkit-scrollbar 宽 8），可用宽度少 8，
+   两侧留白各少 4 → 整列左移 4px。scroll 常驻那 8px，宽度不再随内容变。
+   滚动条轨道是透明的、没得滚时不画滑块，肉眼看不出来。 */
+.editor-scroll { flex: 1; min-height: 0; overflow-y: scroll; overflow-x: hidden; }
+/* 顶部固定标题 = 文件名（双向绑定）。与正文同列居中定宽，H1 字号。
+   上下内边距去掉：标题上方已经有 78px 的大图标，再留 28px 会把标题推太低；
+   下方那 6px 也一并去掉，改由 .doc-title-bar 自己的 margin 控距 */
+/* ⚠️ 宽度**不再**自己写一遍：它是 .editor-pad 的子元素，父级的内容盒
+   已经是正文那一列（720 / 全宽时铺满），跟着走就不会错位。 */
+.doc-title-bar { width: 100%; margin: 0 auto; padding: 0; }
+
+/* ===== md 属性头面板（#5）=====
+   位置在标题栏**上方**：标题是第一眼要看的东西，属性是补充信息，
+   和参考图一致（Notion 也是属性在标题下面，但那边标题本身就是属性区的一部分）。
+   行高压得比正文小一档：这是一块元信息，不该和正文抢注意力。 */
+.props {
+  /* key 那一列的宽度。定义在**面板**上而不是 .props-row 上 ——
+     「＋ 添加属性」和「还有 N 个已隐藏属性」都要拿它对齐，
+     那两个是 .props 的直接子元素，挂在 .props-row 上取不到（会算成 invalid）。 */
+  --props-key-w: 84px;
+  /* 值那一栏输入框的封顶宽。同样定义在面板上，改这一处即可。 */
+  --props-val-w: 220px;
+  margin-bottom: 10px; font-size: 12.5px; line-height: 1.5;
+  color: var(--muted); user-select: none; -webkit-user-select: none;
+}
+.props-warn {
+  margin-bottom: 6px; padding: 5px 8px; font-size: 11.5px;
+  color: var(--danger-ink); background: var(--danger-soft);
+  border-radius: var(--r-sm);
+}
+/* 折叠开关：折叠态是唯一一行，展开态是收起来的一行。
+   折叠态不能是「什么都没有」—— 用户会以为这篇没属性，
+   所以那一行里带摘要（标签 + 创建时间）。 */
+.props-toggle {
+  display: flex; align-items: center; gap: 5px;
+  border: 0; background: transparent; font-family: inherit;
+  padding: 2px 0; margin-bottom: 2px; cursor: pointer; color: var(--faint);
+}
+.props-toggle:hover { color: var(--ink); }
+.props-toggle .pt-chev { display: inline-flex; width: 12px; font-size: 13px; line-height: 1; }
+.props-sum {
+  font-size: 12px; color: var(--faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;
+}
+.props-toggle:hover .props-sum { color: var(--ink); }
+.props-toggle.open .props-sum { color: var(--ink); }
+/* 每行前面的图标。压低存在感（opacity）—— 彩色 emoji 是噪音，
+   这块面板的诉求是「扫一眼知道有哪些属性」，不是看图标。 */
+/* 属性行的图标：走项目里那套 Lucide 描边 svg（propIcons.js），
+   和侧栏、顶栏一致。emoji 那一版已经拿掉了 —— 混进 emoji 和周围所有图标打架。 */
+.props-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 15px; width: 15px; color: var(--faint);
+}
+
+/* 图标 + 属性名 是一块热区：点了开配置菜单。
+   值那一栏不在热区里，否则点输入框会顺带弹菜单、没法好好打字。 */
+.props-key {
+  display: flex; align-items: center; gap: 6px;
+  /* ⚠️ 宽度**必须固定**，值那一栏才会对齐。
+     早先跟着属性名字数走（flex: 0 0 auto），结果「标签」比「创建时间」窄一截，
+     两个值不在一条竖线上 —— 一列元信息竖线不齐，看起来就是散的。
+     宽度是算出来的：图标 15 + 间隙 6 + 左右 padding 8 = 29，
+     加上最长的系统键「创建时间/更新时间」四个汉字 48，留 7px 余量 = 84。
+     名字超出就省略号（悬停有 title 看全名），值那一栏的位置一个字都不会动。 */
+  flex: 0 0 var(--props-key-w); width: var(--props-key-w);
+  min-width: 0;
+  padding: 1px 5px 1px 3px; margin-left: -3px;
+  border: 0; border-radius: 5px; background: transparent;
+  font-family: inherit; text-align: left; color: inherit;
+}
+.props-key.can { cursor: pointer; }
+.props-key.can:hover { background: var(--hover-soft); }
+.props-key.can:hover .props-label, .props-key.can:hover .props-ic { color: var(--ink); }
+.props-key:disabled { cursor: default; }
+.props-key .props-label {
+  flex: 1; min-width: 0;
+  font-size: 12px; color: var(--faint);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+/* ===== 一行属性：key 和 value 横排 =====
+   ⚠️ 这三条（.props-row / .props-val / .props-sys…）早先被一次切片误删了，
+   结果属性竖着摞成一列 —— 「key value 横排」是这块的基本形态，缺一不可。
+   .props-row 是行，.props-key 在左（**宽度固定**，见上面的推导），
+   .props-val 在右且 flex:1 吃掉剩余宽度。 */
+.props-row {
+  display: flex; align-items: center; gap: 4px; min-height: 26px; padding: 1px 0;
+}
+.props-val {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px;
+}
+/* 值要对齐的是**文字的左边缘**，不是各自身高的盒子左边缘。
+   各值类型自带的那点内缩本来就不一样：输入框 7px（打字不能贴着边框）、
+   chip 7px（芯片自带 padding）、裸文本 0px —— 裸文本那几行（创建时间 /
+   更新时间 / 属性为空）就比输入框里的字**右移一截**，一列值竖着看是参差的。
+   这里把那层内缩补到裸文本上（1px 边框 + 7px padding = 8px），
+   ⚠️ 改 .props-input 的 padding 会让 hover/focus 时的文字贴到边框上，别那么干。 */
+.props-sys { color: var(--ink); font-size: 12.5px; padding-left: 8px; }
+.props-readonly { color: var(--ink); font-size: 12.5px; padding-left: 8px; }
+.props-empty { color: var(--faint); font-size: 12px; padding-left: 8px; }
+
+.props-input {
+  /* 框跟着内容长，别一个「2」也摊成一条长杠。
+     封顶 + 最小宽 + field-sizing 三条一起用：
+       · field-sizing:content（Chromium 123+）让输入框按内容算宽，
+         「2」就是个小框，一句话就长开 —— 这是唯一能同时解决「太宽」和
+         「太短装不下」的写法，纯 max-width 只能二选一。
+       · 不支持 field-sizing 的引擎会退回输入框默认宽度（约 20 字符），
+         仍然比无上限的 flex:1 好，不会退化成一条横穿面板的长杠。
+       · min-width 给一个下限，不然「2」的框窄到不好点。
+     flex 用 0 1 auto（不是 1 1 0）：basis 要是 0，field-sizing 就没得算了。 */
+  flex: 0 1 auto;
+  min-width: 72px; max-width: var(--props-val-w);
+  field-sizing: content;
+  height: 24px; padding: 0 7px;
+  font-family: inherit; font-size: 12.5px; color: var(--ink);
+  background: transparent; border: 1px solid transparent; border-radius: 5px;
+  outline: none;
+}
+.props-input:hover { border-color: var(--line); }
+.props-input:focus { background: var(--card); border-color: var(--ink); }
+.props-check { width: 15px; height: 15px; accent-color: var(--ink); cursor: pointer; }
+.props-del {
+  flex: 0 0 auto; width: 18px; height: 18px; padding: 0;
+  border: 0; border-radius: 4px; background: transparent;
+  color: var(--faint); font-size: 10px; cursor: pointer; opacity: 0;
+}
+.props-val:hover .props-del { opacity: 1; }
+.props-del:hover { background: var(--danger-soft); color: var(--danger); }
+
+/* 标签：chip 多选 */
+.props-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; flex: 1; }
+.tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 5px 1px 7px; border-radius: 999px;
+  font-size: 11.5px; color: var(--ink);
+  background: var(--hover-soft); border: 1px solid var(--line);
+}
+.tag-x {
+  width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--faint); font-size: 8px; cursor: pointer;
+}
+.tag-x:hover { background: var(--hover); color: var(--ink); }
+.tag-add {
+  width: 20px; height: 20px; padding: 0; border: 1px dashed var(--line-strong);
+  border-radius: 5px; background: transparent; color: var(--faint);
+  font-size: 11px; cursor: pointer;
+}
+.tag-add:hover { color: var(--ink); border-color: var(--ink); }
+.tag-input {
+  width: 96px; height: 22px; padding: 0 6px;
+  font-family: inherit; font-size: 11.5px;
+  background: var(--card); border: 1px solid var(--ink); border-radius: 5px; outline: none;
+}
+
+.props-add-inline, .props-more, .props-add-btn {
+  border: 0; background: transparent; font-family: inherit; font-size: 12px;
+  color: var(--faint); cursor: pointer; padding: 3px 0; text-align: left;
+}
+.props-add-inline { margin-left: 100px; }
+.props-more, .props-add-btn:hover, .props-add-inline:hover { color: var(--ink); }
+/* 「＋ 添加属性」对齐到 key 那一列的起点（图标后面）——
+   它是「再加一行 key」，就该站在 key 列上；贴到面板最左边会显得它不属于这张表。 */
+/* 「还有 N 个已隐藏属性」：藏掉的属性唯一的回头路，不能因为样式做得像灰字
+   就没人找到它 —— 和「＋ 添加属性」同一个字重，只是缩进对齐 key 列。 */
+.props-reveal { margin-top: 4px; }
+.props-reveal .props-toggle { margin-bottom: 0; }
+
+.props-add { margin-top: 2px; padding-left: calc(var(--props-key-w) - 3px); }
+
+/* 属性配置菜单：类型选择器 + 属性配置面板共用一套壳。
+   **浮层**，锚在被点的那个 key / 按钮旁边 —— 像右键菜单那样弹出来，
+   不在文档流里撑位置（流里的话「＋ 添加属性」下面会长出一大块把正文顶下去）。
+   坐标在 JS 里按触发元素的 rect 算好写进 style（见 EditorPane 的 openAt）。
+   .props 是定位父级。 */
+.props { position: relative; }
+.props-menu {
+  position: absolute; z-index: 30;
+  min-width: 200px; max-width: 260px; padding: 4px;
+  background: var(--card); border: 1px solid var(--line-float);
+  border-radius: var(--r-md); box-shadow: var(--shadow-float-sm);
+  animation: find-in .12s cubic-bezier(.2,.7,.3,1);
+  transform-origin: top left;
+}
+/* 下方空间不够时翻到触发点上面（openAt 里按 window.innerHeight - r.bottom 判的，
+   位置用 inline style 里的 bottom 给 —— 这里只留 transform-origin 给入场动画用。
+   ⚠️ 别再用 `top: auto` 来翻：那等于退回文档流原位，菜单会掉回面板底部。 */
+.props-menu.up { transform-origin: bottom left; }
+.props-menu.cm { min-width: 220px; }
+/* 改名失败的原因。早先改名失败一律静默 return，用户只看到「字回弹了」，
+   根本不知道被什么挡了 —— 静默失败会被当成「改名功能坏了」。
+   所以失败时菜单不关，把原因摆在这里。 */
+.pm-err {
+  margin: 0 6px 4px; padding: 4px 6px; border-radius: 5px;
+  font-size: 11px; line-height: 1.4; color: var(--danger-ink);
+  background: var(--danger-soft);
+}
+.pm-head {
+  padding: 4px 6px 3px; font-size: 11px; font-weight: 600;
+  color: var(--faint); letter-spacing: .03em;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.pm-cur { font-weight: 400; display: inline-flex; align-items: center; gap: 4px; }
+.pm-name {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 6px; margin-bottom: 2px; color: var(--faint);
+}
+.pm-name input {
+  flex: 1; min-width: 0; height: 26px; padding: 0 6px;
+  font-family: inherit; font-size: 12.5px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line-strong); border-radius: 5px; outline: none;
+}
+.pm-name input:focus { border-color: var(--ink); }
+.pm-item {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  padding: 5px 6px; border: 0; border-radius: 5px; background: transparent;
+  font-family: inherit; font-size: 12.5px; color: var(--ink); text-align: left; cursor: pointer;
+}
+.pm-item:hover { background: var(--hover-soft); }
+.pm-ic {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 18px; width: 18px; height: 18px; border-radius: 4px;
+  background: var(--hover-soft); color: var(--muted);
+}
+.pm-text { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+.pm-label { flex: 1; min-width: 0; }
+.pm-hint { font-size: 10.5px; color: var(--faint); }
+/* 选中项右边的对勾。右边留出固定宽度，切换时整行不会左右抖 */
+.pm-check { flex: 0 0 15px; display: inline-flex; color: var(--ink); }
+.pm-item.danger { color: var(--danger); }
+.pm-item.danger .pm-ic { color: var(--danger); }
+.pm-item.danger:hover { background: var(--danger-soft); }
+/* 标题区：大图标(78) + 「添加图标」按钮(hover 才显示) + 标题，垂直堆叠。 */
+.doc-head { display: flex; flex-direction: column; align-items: flex-start; }
+/* 盒子比图标大 10px：78px 的图标 + 四周各 5px 的 hover 底色留白。
+   之前写死 78px 盒子装 56px 图标，现在图标本身要 78px，盒子必须跟着长，
+   否则 hover 底色会被图标顶满、圆角看着发方 */
+.doc-icon {
+  width: 88px; height: 88px; flex: 0 0 88px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; border: 1px solid transparent; border-radius: 14px;
+  padding: 5px; cursor: pointer; color: var(--faint);
+  transition: background .12s ease;
+  /* 设完图标大图标才挂上来（之前是没图标时也渲染占位），挂上来淡一下 */
+  animation: doc-icon-in .16s ease-out;
+}
+@keyframes doc-icon-in {
+  from { opacity: 0; transform: scale(.94); }
+  to   { opacity: 1; transform: none; }
+}
+/* hover 只给一层极淡的底色，不描边：图标本身已经有颜色，再套一圈 88px 的框
+   像是给文档加了个相框，标题区最上面顶着这么个东西太重。
+   border 保留 `1px solid transparent`（不删）—— 删了会让 hover 时盒子尺寸跳 2px。 */
+.doc-icon:hover { background: var(--hover-soft); color: var(--muted); }
+.doc-icon svg { width: 78px; height: 78px; }
+.doc-icon .ic-emoji { font-size: 78px; line-height: 1; }
+.doc-icon.set { color: var(--ink); }
+/* 「添加图标」按钮：inline-flex 才能把笑脸和文字并排放（原来是纯文字按钮，
+   现在前面带一枚 svg，得自己居中对齐）；高度常驻预留（不抖动），hover .doc-head 才显示。
+   visibility 也进transition，但**带延迟**：淡出走完才真正 hidden，
+   少了这个延迟的话 opacity 还没降到 0 就被摘掉，等于没有淡出。 */
+.doc-icon-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: inherit; font-size: 13px; color: var(--muted);
+  background: transparent; border: none;
+  border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  transition: opacity .14s ease, visibility 0s linear .14s,
+              background .12s ease, color .12s ease;
+  height: 28px; margin-top: 4px;
+  opacity: 0; pointer-events: none; visibility: hidden;
+}
+/* 笑脸跟着按钮一起淡入淡出，不给它单独设尺寸 —— 统一 15px，和顶栏那排小图标一致 */
+.doc-icon-btn > svg { width: 15px; height: 15px; flex: 0 0 15px; }
+/* 淡入：visibility 取消延迟，立刻可见，否则 opacity 从 0 慢慢涨的这段时间
+   元素还是 hidden，鼠标停在上面会穿过去。 */
+.doc-head:hover .doc-icon-btn {
+  opacity: 1; pointer-events: auto; visibility: visible;
+  transition: opacity .14s ease, visibility 0s,
+              background .12s ease, color .12s ease;
+}
+/* 已经设过图标：永久藏掉「添加图标」（大图标就是入口）。
+   用 visibility 而不是 display —— display:none 会让这 28px 高度塌掉、标题上跳。
+   特异性要压过上面那条 :hover，否则 hover 时又冒出来。 */
+.doc-icon-btn.off,
+.doc-head:hover .doc-icon-btn.off {
+  opacity: 0; pointer-events: none; visibility: hidden;
+}
+.doc-icon-btn:hover { background: var(--hover-soft); color: var(--ink); }
+.doc-title {
+  width: 100%; outline: none; background: transparent; margin: 0;
+  font-family: "Rubik", var(--font-ui);
+  font-size: 40px; line-height: 1.25; font-weight: 700; color: var(--ink);
+  letter-spacing: -0.01em; padding: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: text;
+}
+/* contenteditable 空态占位（h1 没有 :placeholder；删空后浏览器残留 <br>，用 .empty class） */
+.doc-title.empty::before { content: attr(data-ph); color: var(--faint); font-weight: 600; }
+/* 阅读区：正文一列 720px，居中；留白见 :root 的 --ed-gutter / --ed-pad-x。
+   非全宽时窗口再宽正文也不超过 720（盒子到 920 就停，边上空着）；
+   全宽时盒子铺满，只留固定 100px 的边（html[data-wide] 那条覆盖）。 */
+.editor-pad {
+  width: 100%; max-width: var(--ed-maxw); margin: 0 auto;
+  padding: 10px var(--ed-gutter);
+}
+/* 全宽模式（设置 › 编辑器）。留白固定 100px，正文跟着窗口变宽。 */
+html[data-wide] .editor-pad { max-width: none; padding-inline: var(--ed-pad-x); }
+/* ===== 空态 ===== */
+.placeholder {
+  flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: var(--muted); gap: 12px;
+}
+.ph-emoji { font-size: 44px; opacity: 0.55; }
+.ph-main { font-size: 15px; color: var(--ink); font-weight: 500; }
+.ph-tip { font-size: 12px; color: var(--faint); }
+
+/* ===== 编辑器 chunk 加载中的骨架（React.lazy 的 Suspense fallback）=====
+   和正文同一列、同一个左内边距，换上来的时候不会横向跳。
+   间距按真实标题 + 三行正文的量给，颜色用最淡的那档，别抢注意力。 */
+.editor-skeleton {
+  flex: 1; min-height: 0; overflow: hidden;
+  width: 100%; max-width: var(--ed-maxw); margin: 0 auto;
+  padding: 46px var(--ed-gutter) 10px;
+}
+/* 和 .editor-pad 用同一套几何，骨架换成正文时不跳 */
+html[data-wide] .editor-skeleton { max-width: none; padding-inline: var(--ed-pad-x); }
+.es-title {
+  width: 46%; height: 30px; border-radius: 6px;
+  background: var(--hover-soft); margin-bottom: 34px;
+}
+.es-line {
+  height: 13px; border-radius: 4px; background: var(--hover-soft);
+  margin-bottom: 16px;
+}
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); font-size: 12px; padding: 7px 16px;
+  border-radius: 16px; z-index: 200; box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  /* 淡入：toast 是条件渲染挂上来的，挂载即播一次动画，不用 JS 参与。
+     关键帧里必须重复 translateX(-50%) —— 基态靠它水平居中，
+     漏掉的话动画第一帧会跳到右下角再滑回来。 */
+  animation: toast-in .18s ease-out;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* 「要不要把文件夹加为知识库」的角标（2026-10-18）。
+   和 .toast 同一套浮层语言，但**不自动消失**（它对应一次真实决策），
+   而且没有遮罩 —— 它不能挡用户继续干活。
+   z-index 在 .toast(200) 之上、.dlg-mask(150) 之下：要确认的对话框仍然最上层。 */
+.kb-offer {
+  position: fixed; bottom: 52px; left: 50%; transform: translateX(-50%);
+  width: 380px; max-width: calc(100vw - 32px);
+  padding: 11px 13px 11px; border-radius: var(--radius-float);
+  background: var(--card); border: 1px solid var(--line-float);
+  box-shadow: var(--shadow-float); z-index: 180;
+  animation: kb-offer-in .16s ease-out;
+}
+@keyframes kb-offer-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.kb-offer-t { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.kb-offer-p {
+  font-family: ui-monospace, "SF Mono", monospace; font-size: 11.5px; color: var(--muted);
+  background: var(--hover-soft); border-radius: 5px; padding: 4px 8px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* 长路径要从**开头**截（文件夹名在末尾，截尾巴等于什么都没说）。
+     direction:rtl 能把省略号挪到左边，但必须配 unicode-bidi:plaintext ——
+     少了它，路径开头的 "/" 会被当成中性字符甩到行尾，显示成
+     「Users/jfreey/Documents/随便一个文件夹/」这种假路径。 */
+  direction: rtl; unicode-bidi: plaintext; text-align: left;
+}
+.kb-offer-b { display: flex; gap: 7px; margin-top: 9px; align-items: center; }
+.kb-offer-b button {
+  font-size: 12px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line-strong);
+  background: var(--on-card); color: var(--ink); cursor: pointer; font-family: inherit;
+}
+.kb-offer-b button:hover { background: var(--hover-soft); }
+.kb-offer-b button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.kb-offer-b button.primary:hover { background: #000; }
+.kb-offer-b button.ghost { margin-right: auto; border-color: transparent; background: none; color: var(--muted); padding-left: 0; }
+.kb-offer-b button.ghost:hover { background: none; color: var(--ink); }
+
+/* 对话框（WKWebView 不支持原生 prompt/confirm，自绘） */
+.dlg-mask {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.25); z-index: 150;
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 14vh;
+  animation: dlg-mask-in .13s ease-out;
+}
+@keyframes dlg-mask-in { from { opacity: 0; } to { opacity: 1; } }
+.dlg {
+  background: var(--card); width: 380px; border-radius: 10px; padding: 18px 20px 14px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.25); font-size: 13px;
+  /* 卡片比遮罩慢一点、且带一点位移，弹层才有「浮起来」的层次 */
+  animation: dlg-in .17s cubic-bezier(.2,.7,.3,1);
+}
+@keyframes dlg-in {
+  from { opacity: 0; transform: translateY(-10px) scale(.97); }
+  to   { opacity: 1; transform: none; }
+}
+/* 退场：遮罩和卡片一起淡，卡片再往上收一点。120ms 由 JS 计时后卸载
+   （见 App 里的 closeDlg），pointer-events 关掉避免退场途中还能点。
+   遮罩用 .dlg-mask-out 挂，卡片跟着父级选择器走，两段时长一致。 */
+.dlg-mask.dlg-mask-out {
+  animation: dlg-mask-out .12s ease-in forwards; pointer-events: none;
+}
+@keyframes dlg-mask-out { from { opacity: 1; } to { opacity: 0; } }
+.dlg-mask.dlg-mask-out .dlg {
+  animation: dlg-out .12s ease-in forwards;
+}
+@keyframes dlg-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(-5px) scale(.985); }
+}
+.dlg-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; }
+.dlg-label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+.dlg-input {
+  width: 100%; box-sizing: border-box; border: 1px solid var(--line-strong); border-radius: 6px;
+  padding: 7px 10px; font-size: 13px; font-family: ui-monospace, "SF Mono", monospace; outline: none;
+}
+.dlg-input:focus { border-color: #a8b2c0; box-shadow: 0 0 0 3px rgba(168,178,192,0.15); }
+.dlg-msg { color: var(--ink); line-height: 1.6; margin-bottom: 6px; }
+
+/* 确认/输入框和设置面板共用同一套浮层语言 —— 之前 .dlg 自己写了
+   10px 圆角 + 另一支投影，和侧栏菜单、Crepe 浮层对不上。 */
+.dlg {
+  border-radius: var(--radius-float);
+  border: 1px solid var(--line-float);
+  box-shadow: var(--shadow-float);
+}
+
+/* ===== 设置面板 ===== */
+.set-mask { padding-top: 12vh; }
+.set-panel {
+  /* 双栏（#14）之后变宽：左索引 150px + 右详情，460 塞不下 */
+  width: 640px; max-width: calc(100vw - 48px); max-height: 72vh;
+  /* **固定高度**，不是 min-height。
+     min-height 只能挡住「内容短的分区」，一旦加进一个高的分区
+     （快捷键 14 行，需要 966px），那个分区照样把面板撑高，抖动又回来了。
+     固定 height + .set-pane 自己滚，是唯一能让四节**完全一样高**的写法。 */
+  height: min(524px, 72vh);
+  display: flex; flex-direction: column;
+  background: var(--card);
+  border: 1px solid var(--line-float);
+  border-radius: var(--radius-float);
+  box-shadow: var(--shadow-float);
+  animation: dlg-in .17s cubic-bezier(.2,.7,.3,1);
+}
+.set-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 12px 11px 16px;
+  border-bottom: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.set-title { font-size: 14px; font-weight: 600; }
+.set-x {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--r-sm);
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.set-x:hover { background: var(--hover, rgba(0,0,0,0.05)); color: var(--ink); }
+.set-x svg { width: 15px; height: 15px; }
+
+/* flex: 1 —— 面板现在有 min-height 了（切换不抖），而 .set-body 是 .set-panel 的
+   flex 子项，不写 flex:1 它就只按内容高排：内容短的分区里，左索引那条
+   border-right 会停在半截，看着像没画完。 */
+.set-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 0 8px; }
+/* 双栏（#14）：左一列分区索引，右边只显示当前分区。
+   单栏的问题是设置项在涨 —— 本批已经加了排序、主题、配色、字号、间距、
+   全宽，堆下去面板会很长，得一路滚。 */
+.set-body.two { display: flex; align-items: stretch; padding: 0; overflow: hidden; }
+.set-nav {
+  flex: 0 0 152px; overflow-y: auto; padding: 8px;
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 1px;
+}
+.set-nav-item {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  padding: 6px 9px; border: 0; border-radius: var(--r-md);
+  background: transparent; font-family: inherit; font-size: 13px; color: var(--item);
+}
+.set-nav-item:hover { background: var(--hover-soft); color: var(--ink); }
+.set-nav-item.on { background: var(--row-active); color: var(--ink); font-weight: 600; }
+/* 右栏自己滚。标题只在这个栏里出现一次，索引那一列不重复标题 */
+.set-pane { flex: 1; min-width: 0; overflow-y: auto; padding: 4px 0 10px; }
+.set-sec { padding: 12px 16px 4px; }
+.set-sec + .set-sec { border-top: 1px solid var(--line); }
+.set-sec-name { margin: 0 0 3px; font-size: 11px; font-weight: 600; letter-spacing: .04em; color: var(--faint); text-transform: uppercase; }
+.set-sec-hint { margin: 0 0 10px; font-size: 11.5px; color: var(--faint); line-height: 1.55; }
+
+/* 「关于」：应用图标 + 名字 + 版本号，居中一列。
+   图标直接用打包那张 appIcon（透明底线稿），**不做反相**：
+   filter 作用在元素上会把底板一起翻 —— 暗色下底板从 #202020 翻成近白，
+   一块亮板子杵在暗色面板里比图标本身还扎眼。
+   而它其实也不需要反相：这张图不是一根黑线稿，主体是**近白的填充**
+   （暗色描边只是轮廓），暗色下填充直接压在 --card 深色底板上反而更清楚。 */
+.set-about {
+  display: flex; flex-direction: column; align-items: center; text-align: center;
+  margin: 8px 0 14px;
+}
+.set-about-logo {
+  width: 76px; height: 76px; margin-bottom: 10px;
+  border-radius: 18px; background: var(--card);
+  border: 1px solid var(--line);
+  padding: 8px; box-sizing: content-box;
+  object-fit: contain;
+  /* 用户按住拖会把这张图拖到别处去 —— 一个装饰性图形不该有这行为 */
+  -webkit-user-drag: none; user-select: none; -webkit-user-select: none;
+}
+.set-about-name { font-size: 15px; font-weight: 600; color: var(--ink); line-height: 1.3; }
+.set-about-ver { font-size: 12px; color: var(--faint); margin-top: 3px; }
+.set-about-note { max-width: 42em; margin: 0 auto; text-align: center; }
+.set-row-desc code {
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 11px; padding: 1px 4px; border-radius: 4px;
+  background: var(--hover-soft); color: var(--item);
+}
+
+/* 整行都是点击区：开关本体只负责画，剩下的热区用 .set-row-hit 铺满，
+   这样点描述文字也能切，不用精确点那个 26px 的小开关。
+   负 margin + 等量 padding：让 hover 底色能往两侧溢出到 section 的留白里，
+   两边不相邻地贴住，底色不会连成一片。 */
+.set-row {
+  display: flex; align-items: center; gap: 12px; width: calc(100% + 16px);
+  margin: 0 -8px; padding: 8px; border: 0; background: transparent; text-align: left;
+  font-family: inherit; position: relative; border-radius: var(--r-md);
+}
+.set-row-hit {
+  position: absolute; inset: 0; z-index: 1;
+  border: 0; padding: 0; margin: 0; background: transparent; cursor: pointer;
+}
+.set-row:has(.set-row-hit):hover { background: var(--hover-soft); }
+.set-row-hit:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; border-radius: var(--r-md); }
+.set-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.set-row-label { font-size: 13.5px; color: var(--ink); font-weight: 500; line-height: 1.3; }
+.set-row-note { font-size: 12px; color: var(--faint); font-weight: 400; margin-left: 4px; }
+.set-row-desc { font-size: 11.5px; color: var(--faint); line-height: 1.45; }
+/* 「其它」那行的警示：只在它真的被隐藏时才亮（App 里按 secVis.other 切 .warn） */
+.set-row.warn .set-row-note { color: var(--danger-ink); }
+
+/* 开关按设计规范走灰阶（:root 注释「无彩色强调色，选中/激活一律用灰阶」） */
+.set-switch {
+  flex: 0 0 auto; width: 26px; height: 15px; border-radius: 999px;
+  background: var(--switch-track); position: relative; transition: background .14s ease;
+}
+.set-switch i {
+  position: absolute; top: 1.5px; left: 1.5px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--switch-knob);
+  box-shadow: 0 1px 2px rgba(0,0,0,.22);
+  transition: transform .14s cubic-bezier(.2,.7,.3,1);
+}
+.set-switch.on { background: var(--ink); }
+.set-switch.on i { transform: translateX(11px); }
+
+/* ⚠️ align-items: center 不能省。
+   .set-seg 里混着 <button> 和一个纯 <span>（字号那格的「17px」）：
+   button 自己是 display:flex，内部会把文字居中；而 span 作为 flex 项被
+   stretch 拉满高度后，文字贴的是**顶部** —— 同一格里「17px」比「−」「+」
+   高 6px，肉眼就是没对齐。统一 center 后两类都居中。 */
+.set-seg { display: flex; align-items: center; flex: 0 0 auto; gap: 2px; background: var(--side); padding: 2px; border-radius: var(--r-md); }
+.set-seg button {
+  display: flex; align-items: baseline; gap: 1px;
+  padding: 4px 9px; border: 0; border-radius: 5px; background: transparent;
+  font-family: inherit; font-size: 12.5px; color: var(--muted); cursor: pointer;
+}
+.set-seg button:hover { color: var(--ink); }
+.set-seg button.on { background: var(--seg-on); color: var(--ink); font-weight: 600; box-shadow: var(--shadow-float-sm); }
+/* 多选变体（文字统计）：同一格里可以有好几个 .on。上面那套「必有一个亮着」
+   的白底等于「当前值」，多选下没有互斥关系，得让「全部」这个总闸和后面三个
+   独立项看得出是两拨 —— 靠一段额外的间距分开就够了，不画竖线。 */
+.set-seg.multi > button.all { margin-right: 4px; }
+/* 配色方案（#13）。三块色 = 底 / 侧栏 / 文字，一眼看出这套色是什么调。
+   选中态用**整块的边框**，不靠填充色 —— 三块色本身已经是很强的视觉了，
+   再给选中态加底色会把它盖掉。 */
+.set-swatches { display: flex; flex: 0 0 auto; gap: 6px; }
+.set-swatch {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 5px 6px 4px; cursor: pointer; font-family: inherit;
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-md);
+}
+.set-swatch:hover { background: var(--hover-soft); }
+.set-swatch.on { border-color: var(--ink); }
+.set-swatch i {
+  width: 15px; height: 15px; border-radius: 4px; display: block;
+  /* 每块都描一圈 --line，不然浅色方案在白底上分不出三块的层次 */
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.set-swatch span { font-size: 11px; color: var(--muted); line-height: 1; }
+.set-swatch.on span { color: var(--ink); font-weight: 600; }
+.set-seg-u { font-size: 9.5px; opacity: .6; }
+.dlg-err { color: var(--danger); font-size: 12px; margin-top: 8px; }
+.dlg-btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.dlg-btns button {
+  font-size: 12px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line-strong);
+  background: var(--on-card); cursor: pointer; font-family: inherit;
+}
+.dlg-btns button:hover { background: var(--hover-soft); }
+.dlg-btns button.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.dlg-btns button.primary:hover { background: #000; }
+.dlg-btns button.danger { background: var(--danger); color: var(--bg); border-color: var(--danger); }
+/* 「以后不再提示」是可选动作：靠左、弱化，和「这次的取舍」分开摆 */
+.dlg-btns button.ghost {
+  margin-right: auto; border-color: transparent; background: none;
+  color: var(--muted); padding-left: 0;
+}
+.dlg-btns button.ghost:hover { background: none; color: var(--ink); }
+/* 路径长且不换行词，必须能断行，否则会把弹窗撑爆 */
+.dlg-path {
+  font-family: ui-monospace, "SF Mono", monospace; font-size: 12px; color: var(--muted);
+  background: var(--hover-soft); border-radius: 6px; padding: 6px 9px; margin-bottom: 10px;
+  overflow-wrap: anywhere;
+}
+.dlg-btns button.danger:hover { background: #c93636; }
+.dlg-btns button:disabled { opacity: 0.5; cursor: default; }
+
+.empty-row.err { color: var(--danger); }
+
+/* ===== 浮层统一（本段必须放在文件最后）=====
+   右键菜单 / 知识库菜单 / 对话框 / 图标选择器 / 重命名卡片 / 搜索面板，
+   以及 Crepe 自带的斜杠菜单 / 块菜单 / 选中工具条 / 链接面板 ——
+   全部走 --radius-float + --shadow-float，和侧栏悬浮卡同一套高度语言。
+
+   边框**故意不跟卡片一样用白色**：卡片底色是灰的，白描边在灰卡和白窗口之间
+   起「切割线」的作用；浮层底色本身就是白的，白描边等于没画。
+   这里保留 --line-float 这一支浅灰，靠投影负责分离。
+
+   这段必须 !important：Crepe 的主题样式自带圆角和投影，选择器压不过它。 */
+.ctx,
+.kb-drop,
+.dlg,
+.icp,
+.rn-card,
+.sp,
+/* Crepe 的浮层。⚠️ 这里**不能**用 .crepe-menu / .crepe-toolbar / .crepe-popover ——
+   那三个类名在当前 Crepe（7.22）里压根不存在，实测匹配 0 个元素，
+   上一版「浮层统一」写了它们，等于编辑器菜单一条都没覆盖到。
+   真实类名见 node_modules/@milkdown/crepe/lib/theme/common/ 下的样式：
+     .milkdown-slash-menu  斜杠菜单 / 块菜单
+     .milkdown-toolbar    选中文字的格式化工具条
+     .milkdown-link-preview / .link-preview  链接预览面板
+     .top-bar-heading-dropdown  块顶部的标题类型下拉 */
+.milkdown-slash-menu,
+.milkdown-toolbar,
+.milkdown-link-preview,
+.link-preview,
+.top-bar-heading-dropdown {
+  /* 底色：Crepe 的 --crepe-color-surface 是 #f8f9ff，**偏蓝**，
+     和我们的纯白 --card 放在一起会看出色差。逐个容器改 background 而不是
+     重定义 --crepe-color-*：那套变量编辑器正文、选中区、代码块都在用，
+     动它会把整个编辑器的配色一起带偏。 */
+  background: var(--card) !important;
+  border: 1px solid var(--line-float) !important;
+  border-radius: var(--radius-float) !important;
+  box-shadow: var(--shadow-float) !important;
+  /* 字体：Crepe 默认走 --crepe-font-default(Inter) + --crepe-base-font-size:16px。
+     正文字体要保持 Inter（那是刻意对齐 playground 的），但**菜单文字**统一成
+     侧栏那一档 14px / --font-ui，否则同一个菜单里正文 16px、条目 14px。 */
+  font-family: var(--font-ui);
+}
+.milkdown-slash-menu *,
+.milkdown-toolbar *,
+.milkdown-link-preview *,
+.top-bar-heading-dropdown * {
+  font-family: var(--font-ui);
+}
+/* 提示类单独一档：它小、贴着文字，重投影会糊住底下的内容。
+   Crepe 7.22 里 tooltip 也没有独立的 .crepe-tooltip 类，工具提示走的是
+   通用 tooltip 容器，这里跟着真实类名一起兜住。 */
+.milkdown-tooltip,
+[data-tooltip] {
+  border-radius: var(--r-md) !important;
+  box-shadow: var(--shadow-float-sm) !important;
+}
+
+/* ===== 编辑器（Milkdown Crepe）=====
+   Crepe 自带主题：theme/nord.css 是配色变量，theme/common/style.css 是功能样式
+   （把手、工具条、列表、代码块…），在 EditorPane.jsx 里 import。这里只管容器。 */
+
+/* 字号开关。Crepe 把 --crepe-base-font-size 声明在 **.milkdown 上**（不是 :root，
+   见 @milkdown/crepe/lib/theme/nord/style.css:20），而 common/reset.css:29 在
+   同一个元素上 `font-size: var(--crepe-base-font-size)` —— 正文其余尺寸全是 em，
+   所以改这一个值整篇等比缩放。
+   ⚠️ 因此 JS **不能**把它设到 documentElement 上：.milkdown 自己的声明会在它内部
+   盖掉从 :root 继承来的值，点多少次都没反应。JS 只在 :root 写 --ed-font，
+   由这条 (0,2,0) > .milkdown (0,1,0) 的规则转译过去。 */
+.mk-host .milkdown { --crepe-base-font-size: var(--ed-font, 16px); }
+
+/* ===== 块之间的纵向节奏 =====
+   Crepe 的 reset.css 第一条是 `.milkdown * { margin: 0; padding: 0 }` —— 全清零，
+   然后**逐个块类型手工把间距加回去**。加漏了的那个就贴着邻居，视觉上立刻出戏：
+     段落 → 段落   p { padding: 4px 0 }                      = 8px
+     段落 → 表格   .milkdown-table-block { margin: 4px 0 }   = 8px
+     段落 → 代码块 .milkdown-code-block { margin: 4px 0 }   = 8px
+     段落 → 引用   blockquote { margin: 4px 0 }             = 8px
+     段落 → **列表** .milkdown-list-item-block { padding: 0 } + **没有 margin** = 4px  ← 异类
+     段落 → **分隔线** hr（同样没有 margin）                = 4px                 ← 异类
+
+   ⚠️ Crepe 的 34 个 `--crepe-*` 变量里**没有任何一个是间距**（28 个颜色、
+   3 个字体、2 个阴影、1 个基准字号），所以只能覆盖它的 reset.css。
+   默认 4px = Crepe 原值，保持默认观感不变；设置 › 外观 › 段落间距 改这一个数。
+
+   段落和列表用 **padding**：表格 / 代码块 / 引用已经被 Crepe 给了
+   `margin: 4px 0`，我们再加一层 margin 会叠成 12px；padding 叠加是确定的。
+   ⚠️ **`hr` 绝对不能跟它们一起用 padding** —— Crepe 给 hr 的是一条
+     `background-color` 色带，padding 会被背景**填满**，
+     那条线就从 1px 变成 4+1+4 = **9px**（用户 2026-10-13 报「分割线变粗了」）。
+     hr 要的是**元素外面**的空隙，只能用 margin。
+   ⚠️ 列表之所以能用 padding：它原本 `padding: 0` 且**没有 margin**，
+     是不加就贴死邻居的那个漏网之鱼，补 padding 不和任何东西打架。 */
+.mk-host .milkdown .ProseMirror p,
+.mk-host .milkdown .milkdown-list-item-block {
+  padding-top: var(--para-pad, 4px);
+  padding-bottom: var(--para-pad, 4px);
+}
+.mk-host .milkdown .ProseMirror hr {
+  margin-top: var(--para-pad, 4px);
+  margin-bottom: var(--para-pad, 4px);
+}
+
+.mk-host .milkdown { outline: none; }
+/* 字体：crepe 的 nord 主题只是「点名」Inter / Rubik，从不加载字体文件 ——
+   这台机器上两个都没有，于是正文落到系统兜底、标题落到 Cambria/Times（衬线）。
+   现在文件头部的 @font-face 把 Inter / Rubik 自托管进来了，这里点名即可。
+   中文不在拉丁子集里，自动落到 --font-ui 栈的 PingFang SC（和 playground 一致：
+   那边中文同样是系统字体）。 */
+.mk-host .milkdown {
+  --crepe-font-default: "Inter", var(--font-ui);
+  --crepe-font-title: "Rubik", var(--font-ui);
+  --crepe-font-code: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+/* Crepe 自带主题给了自己的底色和 60/120px 内边距（reset.css 的
+   `.milkdown .ProseMirror { padding: 60px 120px }`），和本应用的编辑器区冲突 ——
+   底色去掉、内边距只留上下。
+   ⚠️ 选择器必须比它**多一级**（.mk-host .milkdown .ProseMirror）而不是写
+   `.mk-host .ProseMirror` 靠加载顺序取胜（2026-10-21 用户报「标题和正文没对齐」）：
+   编辑器现在是 React.lazy 的独立 chunk，它的 CSS 在运行时才插进 <head>，
+   **排在本文件之后** —— 同特异度下 Crepe 会赢，正文被推右 120px、下移 60px，
+   标题还停在左边缘。加一级就与顺序无关了。 */
+.mk-host .milkdown { background: transparent; }
+.mk-host .milkdown .ProseMirror { outline: none; padding: 8px 0 120px; }
+/* 拖拽幽灵：浮层只装内容，不要底框（加了像拖一块空白板） */
+.mk-ghost {
+  position: fixed; z-index: 320; left: 0; top: 0;
+  pointer-events: none; will-change: transform;
+  opacity: .7; user-select: none; -webkit-user-select: none;
+}
+.mk-ghost[hidden] { display: none; }
+.mk-ghost > .milkdown { padding: 0; }
+/* 只留内容本身的透明度和字形：底色/边框/阴影一律不要（crepe 的 .milkdown 自带底色） */
+.mk-ghost, .mk-ghost .milkdown, .mk-ghost .milkdown-list-item-block,
+.mk-ghost ul, .mk-ghost ol, .mk-ghost li, .mk-ghost .children,
+.mk-ghost .content-dom, .mk-ghost p, .mk-ghost div {
+  background: transparent !important;
+  box-shadow: none !important;
+  border-color: transparent !important;
+  outline: none !important;
+}
+/* 源行盖一层白蒙版 = 视觉上的「变淡」 */
+.mk-dim {
+  position: fixed; z-index: 318; left: 0; top: 0;
+  background: rgba(255, 255, 255, .68); border-radius: 4px; pointer-events: none;
+}
+.mk-dim[hidden] { display: none; }
+/* 给 setDragImage 用的 1×1 透明占位：原生拖拽影像收掉 */
+.mk-nodrag { position: fixed; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* ===== 框选 / 落地的块高亮 =====
+   Milkdown 主题自带 `.ProseMirror-selectednode { outline: 2px solid #88ccff }`，那圈蓝色
+   太扎眼也和灰阶界面对不上。
+   - 多选框（.mk-bs，EditorPane 的 decoration 逐块挂）：Notion 那套浅灰底 + 一圈淡描边
+   - 拖拽落地后的单块（.ProseMirror-selectednode）：只留底色、**不要描边** ——
+     落点自带一条落点线，再套一圈框看着像「多了一层边框」 */
+/* 选中的行只要底色，不要描边（描边和拖放落点线、把手叠在一起显得像多了一层框） */
+.mk-host .ProseMirror .mk-bs {
+  outline: none !important;
+  border-radius: 4px;
+  /* 上下各收 1px。相邻块之间本来一条缝都没有，底色会连成一整片，
+     看不出到底选了几行 —— 两块并排和一块长得一样。
+     用 background-image 的硬停渐变（不是 background-color）把上下 1px 留成透明。
+     为什么不用更顺手的写法：
+       · padding / border 会改块高，整篇正文往下错位 —— 全局 box-sizing 是 border-box，
+         但 height:auto 的块加边框照样长高；
+       · background-clip:padding-box 倒是能切边，可是这些块上没有 padding，
+         切不到东西。
+     渐变里的百分比按渐变线长度算，to bottom 就是块高，所以 calc(100% - 1px) 正好是块底。 */
+  --mk-bs-fill: linear-gradient(to bottom,
+    transparent 0 1px,
+    var(--mk-sel) 1px calc(100% - 1px),
+    transparent calc(100% - 1px) 100%);
+  background: var(--mk-bs-fill);
+}
+.mk-host .ProseMirror .ProseMirror-selectednode {
+  outline: none !important;
+  border: none !important;
+  background: var(--mk-sel);
+}
+/* 列表项：主题用 ::after 画框（要把 marker 那 32px 让出来），跟着一起改。
+   这个元素同时带 .mk-bs，--mk-bs-fill 在上面那条里已经定义好了，直接引用。 */
+.mk-host .ProseMirror li.mk-bs {
+  background: var(--mk-bs-fill);
+}
+.mk-host .ProseMirror li.ProseMirror-selectednode {
+  outline: none !important;
+  background: var(--mk-sel);
+}
+.mk-host .ProseMirror li.mk-bs::after {
+  border-color: transparent !important;
+}
+.mk-host .ProseMirror li.ProseMirror-selectednode::after {
+  border-color: transparent !important;
+}
+
+/* ===== 页内查找（#4）===== */
+:root {
+  /* 命中高亮。**亮黄**，不用灰 —— 灰已经被块框选（.mk-bs）和选区占用了，
+     查找命中再叠一层灰就分不清「这是选中的」还是「这是搜到的」。
+     当前那一处（.cur）再压深一档并加一圈同色描边，滚动过去时一眼看到是哪条。 */
+  --find-hit: #ffd60a;
+  --find-hit-cur: #f5b800;
+
+  /* ===== #12 夜间模式补的一批语义变量 =====
+     之前散在下面各处、**不跟主题走**的写死颜色。原来亮色下看不出问题，
+     暗色下会一个个冒出来（白底输入框、白按钮、暗底上什么都看不见的滚动条）。
+     全部收成变量，暗色那边只需要再给一份。 */
+  --on-card: #ffffff;          /* 卡片上的纯白面：按钮底、开关滑块、图标描边 */
+  /* 侧栏卡片和**窗口底**之间那道切口。亮色下 = 窗口白，暗色下 = 窗口深色 ——
+     这个环的作用是「把卡片从背景里切出来」，不是「画一圈亮边」。
+     ⚠️ 别拿 --on-card 顶替：那个在暗色下是浅色，会在侧栏四周镶一道刺眼的白环
+     （用户 2026-10-13 报的「sidebar 的白色边框太刺眼」）。 */
+  --side-ring: var(--bg);
+  /* 开关：轨道未开时的底色 + 滑块的颜色。
+     ⚠️ 这两个必须**互为反色**，否则暗色下开着的开关滑块会和轨道同色、直接消失
+     （`--ink` 在暗色下是浅色，滑块要是也浅就找不到了）。
+     亮色下 = 灰轨道 + 白滑块；暗色下 = 深灰轨道 + 深色滑块。 */
+  --switch-track: #d4d2cc;
+  --switch-knob: #ffffff;
+  /* 分段控件里「当前值」那一格。它是**浮在轨道上的一枚凸起小块**，
+     所以取 --card（亮色下 #ffffff，和原来写死的 #fff 完全一致；暗色下是
+     深色里的一块浅面）。⚠️ 不能用 `--on-card` —— 那个暗色下是浅色，
+     配 `color: var(--ink)`（也是浅色）就成了一片糊。 */
+  --seg-on: var(--card);
+  --scrollbar: rgba(55, 53, 47, .18);
+  --scrollbar-hover: rgba(55, 53, 47, .3);
+  --focus-ring: rgba(55, 53, 47, .18);
+  --ok: #8bb85c;               /* 「已保存」那颗绿点 */
+  --warn: #e8b93e;             /* 「保存中」那颗黄点 */
+  --mk-sel: rgba(55, 53, 47, .06);   /* 块选中 / 拖框的半透明填充 */
+  --mk-sel-line: rgba(55, 53, 47, .2);/* 拖框的边框 */
+
+  /* ===== Crepe 的配色变量（#12 夜间模式 / #13 主题）=====
+     ⚠️ 这 23 个值原来来自 `import "@milkdown/crepe/theme/nord.css"`。
+     那样做有两个问题：
+       ① 换暗色要**换 import**，而同特异度下谁后加载谁赢 —— 打包器不保证顺序；
+       ② Crepe 自带的 `nord-dark` 是**冷蓝灰**（#1b1c1d / #111418），
+          和这个 app 的暖中性 UI 不同调，硬套上去编辑器会和四周对不上。
+     所以改成**变量定义收归我们自己的**：亮色值仍取自 nord.css（观感不变），
+     暗色另配一套从我们的暖色板推出来的。#13 的主题系统也走同一套机制。
+     定义在 :root 上、靠继承进 `.milkdown` —— Crepe 的 common/*.css 只**使用**
+     这些变量、不定义（只有 diff.css 定义了自己的 --crepe-color-diff-*，那是语义色，不管）。 */
+  --crepe-color-background: var(--bg);
+  --crepe-color-on-background: var(--ink);
+  --crepe-color-surface: var(--card);
+  --crepe-color-surface-low: var(--side);
+  --crepe-color-on-surface: var(--ink);
+  --crepe-color-on-surface-variant: var(--muted);
+  --crepe-color-outline: var(--muted);
+  --crepe-color-primary: #37618e;
+  --crepe-color-secondary: #d7e3f8;
+  --crepe-color-on-secondary: #101c2b;
+  --crepe-color-inverse: #2e3135;
+  --crepe-color-on-inverse: #eff0f7;
+  --crepe-color-inline-code: #ba1a1a;
+  --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #eceef4;
+  --crepe-color-selected: #e1e2e8;
+  --crepe-color-inline-area: #d8dae0;
+  --crepe-shadow-1: 0 1px 3px 1px rgba(0,0,0,.15), 0 1px 2px 0 rgba(0,0,0,.3);
+  --crepe-shadow-2: 0 2px 6px 2px rgba(0,0,0,.15), 0 1px 2px 0 rgba(0,0,0,.3);
+}
+
+/* ===== 暗色（#12）=====
+   只覆盖**颜色 / 阴影**，几何量（--olr-*、--ed-*、--indent…）在两套里完全一样，
+   所以这里一份都不重复 —— 重复了就等于两份真值，改一个忘一个。
+   三档模式由 JS 解析后写到 <html data-theme>：
+     跟随系统 → 监听 matchMedia，变了就改属性（不刷新页面）
+     强制亮 / 强制暗 → 直接写死
+   CSS 这边只认 data-theme，不写 @media —— 免得「跟随系统」和
+   「强制亮」两套规则打架。 */
+:root[data-theme="dark"] {
+  --bg: #191918;
+  --side: #151514;
+  --card: #202020;
+  --side-card: #242423;
+  --line: #2f2f2c;
+  --line-strong: #46453f;
+  --line-float: #3a3a35;
+  --shadow-float: 0 2px 30px rgba(0, 0, 0, .6);
+  --shadow-float-sm: 0 1px 3px rgba(0, 0, 0, .45);
+
+  /* 字色整体反过来。--muted / --faint 保持和亮色同档明度，
+     暗底上要的就是这个对比度；直接用亮色那组会太刺。 */
+  --ink: #e6e4de;
+  --muted: #9c9a93;
+  --faint: #6a6862;
+  --item: #a6a49d;
+  --icon-dim: #9c9a93;
+
+  /* 悬停 / 选中的叠加色：亮色是「压一层黑」，暗色必须反过来压一层白，
+     否则 rgba(0,0,0,.08) 压在深底上什么都看不出来。 */
+  --hover: rgba(255, 255, 255, .09);
+  --hover-soft: rgba(255, 255, 255, .045);
+  --row-hover: rgba(255, 255, 255, .05);
+  --row-active: rgba(255, 255, 255, .11);
+  --divider: rgba(255, 255, 255, .09);
+
+  --danger: #ff7b72;
+  --danger-ink: #ffa198;
+  --danger-soft: rgba(255, 123, 114, .16);
+
+  /* 查找高亮：亮色是明黄，暗底上明黄会**刺眼且盖住字** —— 改成深琥珀，
+     底色压暗、由浅色的 --ink 压在上面反而更清楚。 */
+  --find-hit: #6b5200;
+  --find-hit-cur: #8f6a00;
+
+  /* 卡片上的纯白面要反过来变成**浅色**（按钮底、开关滑块）——
+     暗底上留个纯白块会像贴了张便签。 */
+  --on-card: #e6e4de;
+  /* 切口跟窗口底同色（--side-card #242423 坐在 #191918 上），
+     暗色下靠的是投影 + 这条同色切口，不是亮边。 */
+  --side-ring: var(--bg);
+  --switch-track: #4a4a46;
+  --switch-knob: #191918;
+  --seg-on: #3a3a35;
+  --scrollbar: rgba(255, 255, 255, .16);
+  --scrollbar-hover: rgba(255, 255, 255, .3);
+  --focus-ring: rgba(255, 255, 255, .28);
+  --ok: #7fb069;
+  --warn: #d9a441;
+  --mk-sel: rgba(255, 255, 255, .08);
+  --mk-sel-line: rgba(255, 255, 255, .26);
+  --topbar-line: rgba(255, 255, 255, .085);   /* 暗色：比 --line(#2f2f2c) 轻一档 */
+
+  /* Crepe：跟着上面的板走。primary 是唯一没有对应变量的（品牌蓝），
+     暗色下要提亮一档才够醒目。 */
+  --crepe-color-primary: #a1c9fd;
+  --crepe-color-secondary: #2f3b4a;
+  --crepe-color-on-secondary: #d7e3f8;
+  --crepe-color-inverse: #e1e2e8;
+  --crepe-color-on-inverse: #2e3135;
+  --crepe-color-inline-code: #ffb4ab;
+  --crepe-color-error: #ffb4ab;
+  --crepe-color-hover: #26262a;
+  --crepe-color-selected: #4c5b7a;
+  --crepe-color-inline-area: #2a2a2c;
+  /* 暗底上纯黑投影几乎看不见，边框才是边界 —— 把阴影压浅一点。 */
+  --crepe-shadow-1: 0 1px 3px 1px rgba(0,0,0,.4), 0 1px 2px 0 rgba(0,0,0,.5);
+  --crepe-shadow-2: 0 2px 6px 2px rgba(0,0,0,.4), 0 1px 2px 0 rgba(0,0,0,.5);
+}
+.mk-host .ProseMirror .mk-find-hit {
+  background: var(--find-hit);
+  border-radius: 2px;
+  /* 命中可能连着（"aaa" 里搜 "aa"），相邻的两条之间要留缝才数得清 */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, .5);
+}
+.mk-host .ProseMirror .mk-find-hit.cur {
+  background: var(--find-hit-cur);
+  box-shadow: 0 0 0 1.5px rgba(200, 140, 0, .55);
+}
+
+/* 查找框。绝对定位在 .editor-wrap 右上角 —— 找的是**这一篇**，框就贴在正文边上。
+   和右下角那枚胶囊一样走 --inset-r，右缘对齐。 */
+.find-box {
+  position: absolute; z-index: 8;
+  top: 10px; right: calc(var(--inset-r) + var(--sbw));
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 6px; width: 340px;
+  background: var(--card); border: 1px solid var(--line-float);
+  border-radius: var(--radius-float); box-shadow: var(--shadow-float);
+  animation: find-in .13s cubic-bezier(.2,.7,.3,1);
+  transform-origin: top right;
+}
+@keyframes find-in {
+  from { opacity: 0; transform: translateY(-4px) scale(.99); }
+  to { opacity: 1; transform: none; }
+}
+.find-row { display: flex; align-items: center; gap: 5px; }
+.find-ic { display: inline-flex; flex: 0 0 15px; color: var(--faint); }
+.find-ic svg { width: 15px; height: 15px; }
+.find-input {
+  flex: 1; min-width: 0; height: 26px; padding: 0 8px;
+  font-family: inherit; font-size: 13px; color: var(--ink);
+  background: var(--bg); border: 1px solid var(--line-strong);
+  border-radius: 6px; outline: none;
+}
+.find-input:focus { border-color: var(--ink); }
+/* 命中计数。查不到时染成警示色 —— 「没搜到」和「还没输」要一眼分得开 */
+.find-count {
+  flex: 0 0 auto; min-width: 46px; text-align: right;
+  font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums;
+}
+.find-count.none { color: var(--danger-ink); }
+.find-mini {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 24px; width: 24px; height: 24px; padding: 0;
+  border: 0; border-radius: 5px; background: transparent;
+  color: var(--muted); cursor: pointer;
+}
+.find-mini svg { width: 15px; height: 15px; }
+.find-mini:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.find-mini[aria-pressed="true"] { background: var(--hover); color: var(--ink); }
+.find-mini:disabled { opacity: .3; cursor: default; }
+.find-btn {
+  flex: 0 0 auto; height: 26px; padding: 0 10px;
+  font-family: inherit; font-size: 12.5px; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line-strong);
+  border-radius: 6px; cursor: pointer;
+}
+.find-btn:hover:not(:disabled) { background: var(--hover-soft); }
+.find-btn:disabled { opacity: .4; cursor: default; }
+
+/* 框住多块时的收尾：把 crepe 的文字格式工具条藏掉。
+   它是给「选中一段文字」用的，框选整块时弹在内容上方很挡事（BlockNote 这时
+   换成了块级工具条）。用 JS 给 .ProseMirror 挂 .mk-multi 来判定，样式藏工具条。 */
+.mk-host.mk-multi .milkdown-toolbar { display: none !important; }
+/* 把手容器本身不吃指针，只让 ＋ / ⠿ 两个按钮吃：把手 66px 宽、悬在正文左侧那条空白上，
+   容器照单全收的话空白处就点不出框选了。命中测试跟着 pointer-events 走，视觉位置不变。 */
+.mk-host .milkdown .milkdown-block-handle { pointer-events: none; }
+.mk-host .milkdown .milkdown-block-handle .operation-item { pointer-events: auto; }
+
+/* 空白带按住拖时跟手的框（真正画一个框给用户看，光靠块底色太隐蔽） */
+.mk-marquee {
+  position: fixed; z-index: 317; pointer-events: none;
+  background: var(--mk-sel);
+  border: 1px solid var(--mk-sel-line);
+  border-radius: 4px;
+}
+
+/* 文字选区高亮。**必须显式给**，不能靠浏览器默认：
+   默认值跟的是操作系统的亮/暗，跟 <html data-theme> 各走各的，于是
+   「系统暗色 + 应用亮色」会得到一个深灰选区压在白底上（糊），
+   「系统亮色 + 应用暗色」会得到一个浅灰选区压在近黑底上（刺眼）。
+   真凶另有其人：`.milkdown .ProseMirror *::selection { background: var(--crepe-color-selected) }`
+   （Crepe 自带，特异度 0,2,1）本来就一直在给选区上色 —— 值就是 `--crepe-color-selected`。
+   所以**真正要改的是那个变量**：它三个暗色值（#333336 / #393120 / #2b3438）都太暗，
+   压在 #191918 上只亮 20 出头，肉眼等于没上色。已一并调亮。
+   ⚠️ 下面 .mk-framesel 那条「框选块时清空」是**有意**的，别被这条覆盖掉：
+   它特异度更高（0,3,1 vs 0,0,1），仍然赢。 */
+::selection {
+  background: var(--crepe-color-selected);
+  color: inherit;
+}
+
+/* 框选块时不再叠加文字选区高亮：块的底色已经说明「这几行被选中了」，
+   两层一起显示会显得脏，而且文字高亮会盖住底色。 */
+.mk-host.mk-framesel .ProseMirror ::selection {
+  background: transparent;
+}
+/* 自由拖框选的过程中不显示左侧把手：Milkdown 的把手不会自己收掉，得用样式压住 */
+.mk-host.mk-marquee-drag .milkdown-block-handle { display: none !important; }
+/* 自由框选拖动期间：把手和文字格式工具条都不该出现 */
+.mk-host.mk-marquee-drag .milkdown-toolbar { display: none !important; }
+/* 指针不在把手上时，把手按钮不吃事件：把手 66px 宽、悬在正文左侧那条空白上，
+   不这样处理的话它会把空白整条盖住，左侧就没法起框选了（视觉位置不动，只关命中）。 */
+.mk-host.mk-handle-ghost .milkdown-block-handle .operation-item { pointer-events: none; }
+
+/* 锁定只读（.editor-wrap.locked）：把**所有会改文档的浮层**整个压掉。
+   为什么 editable=false 不够 —— 那些浮层是 Milkdown 各 feature 自己挂的，
+   它们不查 editable：块把手的 ＋ 按钮点下去照样插一行新块，
+   选中文本后格式工具条照样能把字加粗，点链接照样弹改链接的框。
+   display:none 是整条：它连命中测试一起消掉，不用再补 pointer-events。 */
+.editor-wrap.locked .milkdown-block-handle,
+.editor-wrap.locked .milkdown-toolbar,
+.editor-wrap.locked .milkdown-top-bar,
+.editor-wrap.locked .milkdown-link-preview,
+.editor-wrap.locked .milkdown-link-edit,
+.editor-wrap.locked .milkdown-slash-menu,
+.editor-wrap.locked .milkdown-table-block .handle { display: none !important; }
+
+/* 空块占位符文案：crepe 默认 "Please enter..."。
+   不用它的配置项（`ctx.update(placeholderConfig.key, …)`）—— 从
+   `@milkdown/crepe/feature/placeholder` 拿到的 $ctx 和 feature 内部注册的不是同一个对象
+   （模块实例不同），一改就报 Context "placeholderConfigCtx" not found。
+   它的 CSS 本来就是 `content: attr(data-placeholder)`，这里直接盖掉渲染文本最省事。 */
+.mk-host .ProseMirror .crepe-placeholder::before {
+  content: '输入文字或按"/"启用命令';
+}
+/* 锁定时把这个占位文案也收掉。用户点一下空行看到「输入文字或按 /」，
+   而底下根本打不进字 —— 这是最容易被当成「没锁住」的一处。
+   加 :not(.locked) 更省事：所有空块提示一次性全灭，不用逐个 feature 枚举。 */
+.editor-wrap.locked .crepe-placeholder::before { content: none; }
+
+/* 侧栏右键 / 三点菜单：按参考图排版 */
+.ctx { min-width: 176px; padding: 4px; }
+.ctx > div { gap: 10px; padding: 6px 8px; }
+.ctx > div .grow { flex: 1; }
+
+/* ===== 自定义图标选择器（版式照参考图）===== */
+.icp {
+  /* 圆角 / 投影 / 边框同理由文件末尾「浮层统一」管 */
+  position: fixed; display: flex; flex-direction: column; width: 300px;
+  background: var(--card); padding: 4px 0 0;
+  /* 挂上来淡入 + 轻微放大。条件渲染（iconNode 非空才挂），挂载即播一次 */
+  transform-origin: top left;
+  animation: icp-in .14s cubic-bezier(.2,.7,.3,1);
+}
+@keyframes icp-in {
+  from { opacity: 0; transform: scale(.96) translateY(-4px); }
+  to   { opacity: 1; transform: none; }
+}
+/* 收起时的淡出：挂 .icp-out，由 JS 延时卸载（见 App 里的 closeIconPicker）。
+   没有它的话关闭是瞬间消失，和其它弹层（弹窗、toast）动起来不一致。 */
+.icp.icp-out {
+  animation: icp-out .1s ease-in forwards;
+  pointer-events: none;
+}
+@keyframes icp-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: scale(.97); }
+}
+/* 页签行：表情符号 / 图标 … 右边「移除」 */
+.icp-tabs { display: flex; align-items: center; gap: 2px; padding: 2px 6px 0; }
+.icp-tab {
+  border: none; background: transparent; cursor: pointer; font: inherit;
+  font-size: 13px; color: var(--muted); padding: 5px 9px;
+  border-radius: 7px 7px 0 0; border-bottom: 2px solid transparent;
+}
+.icp-tab:hover { color: var(--ink); }
+.icp-tab.on { color: var(--ink); border-bottom-color: var(--ink); }
+.icp-rm {
+  margin-left: auto; border: none; background: transparent; cursor: pointer;
+  font: inherit; font-size: 12px; color: var(--muted);
+  padding: 5px 9px; border-radius: 7px;
+}
+.icp-rm:hover:not(:disabled) { background: var(--hover-soft); color: var(--ink); }
+.icp-rm:disabled { color: var(--faint); cursor: default; }
+
+/* 筛选框 */
+.icp-find { position: relative; display: flex; align-items: center; padding: 6px 8px; }
+.icp-find-ic { position: absolute; left: 16px; display: inline-flex; color: var(--faint); pointer-events: none; }
+.icp-find-ic svg { width: 14px; height: 14px; }
+.icp-find input {
+  width: 100%; box-sizing: border-box; font: inherit; font-size: 13px; color: var(--ink);
+  border: 1px solid var(--line-strong); border-radius: 7px; outline: none;
+  padding: 5px 26px 5px 26px; background: var(--card);
+}
+.icp-find input:focus { border-color: #7d9bd8; }
+.icp-clear {
+  position: absolute; right: 15px; display: inline-flex; border: none;
+  background: transparent; cursor: pointer; padding: 2px; color: var(--faint); border-radius: 4px;
+}
+.icp-clear:hover { background: var(--hover-soft); color: var(--ink); }
+.icp-clear svg { width: 13px; height: 13px; }
+
+/* 配色行：一排色块，14 个正好铺满（和 emoji 一样 7 列两行） */
+.icp-colors { padding: 0 8px 2px; border-bottom: 1px solid var(--line); }
+.icp-swatches { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 2px 0 8px; }
+.icp-sw {
+  display: flex; align-items: center; justify-content: center;
+  height: 24px; padding: 0; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 6px; background: #fff;
+}
+.icp-sw:hover { border-color: var(--line-strong); }
+.icp-sw.on { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.icp-sw-dot { width: 14px; height: 14px; border-radius: 50%; display: block; }
+.icp-sw-auto { display: inline-flex; color: var(--muted); }
+.icp-sw-auto svg { width: 13px; height: 13px; }
+
+/* 主体：可滚，分类小节 */
+.icp-body { max-height: 246px; overflow-y: auto; padding: 0 8px; }
+.icp-cat-n { font-size: 11px; color: var(--faint); padding: 8px 2px 2px; }
+.icp-none { padding: 18px 2px; text-align: center; font-size: 12px; color: var(--faint); }
+.icp-paste {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  border: none; background: var(--hover-soft); color: var(--ink);
+  font: inherit; font-size: 12px; cursor: pointer; padding: 5px 8px;
+  border-radius: 6px; margin: 6px 0 2px;
+}
+.icp-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 1px; }
+.icp-cell {
+  position: relative; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 1px; height: 34px; padding: 0;
+  border: 1px solid transparent; border-radius: 6px; background: transparent;
+  cursor: pointer; color: var(--muted);
+}
+.icp-cell:hover { background: var(--hover-soft); color: var(--ink); }
+.icp-cell.on { background: var(--hover); color: var(--ink); border-color: var(--line-strong); }
+.icp-cell svg { width: 16px; height: 16px; }
+.icp-cell.em { font-size: 17px; line-height: 1; }
+/* 两页签统一：34px 方格，中文名只留在 title 里。
+   之前图标页签用 42px 高 + 9px 小标签，8 列放不下全被截断，末行还空着，看着不均匀。 */
+.icp-cell svg { width: 17px; height: 17px; }
+
+/* 最近使用：钉在主体下面 */
+.icp-recent { border-top: 1px solid var(--line); padding: 0 8px 2px; }
+.icp-hint { padding: 5px 10px 7px; font-size: 10px; color: var(--faint); text-align: center; }
+
+/* 树行里的自定义图标：emoji 和 svg 共用同一个 18px 的目标尺寸（.icon svg）。
+   emoji 字形四周本来就有留白，同字号看着比 svg 小，所以要比 18px 略放大一点，
+   视觉重量才对得上（15px emoji ≈ 18px 描边图标）。原来 19px 是配 24px svg 调的，
+   svg 降到 18px 后必须跟着降。 */
+.ic-emoji { font-size: 15px; line-height: 1; transition: opacity .2s ease; }
+.node .row:hover .icon.dir > .ic-emoji { opacity: 0; }
+/* 菜单项右侧显示当前 emoji */
+.ctx > div .ctx-cur { font-size: 13px; line-height: 1; color: var(--muted); }
+
+/* 重命名卡片前面的图标现在是按钮了 */
+.rn-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; flex: 0 0 auto; padding: 0;
+  border: none; background: transparent; border-radius: 4px;
+  color: var(--muted); cursor: pointer;
+}
+.rn-icon:hover { background: var(--hover-soft); color: var(--ink); }
+
+/* ===== 重命名输入框（贴着那一行弹出）===== */
+.rn-mask { position: fixed; inset: 0; z-index: 120; }
+.rn-card {
+  position: fixed; display: flex; align-items: center; gap: 6px;
+  /* 圆角 / 投影 / 边框同理由文件末尾「浮层统一」管 */
+  padding: 5px 8px; background: var(--card);
+}
+.rn-icon { display: inline-flex; color: var(--muted); flex: 0 0 auto; }
+.rn-icon svg { width: 15px; height: 15px; }
+.rn-input {
+  flex: 1; min-width: 0; border: none; outline: none; background: none; padding: 1px 0;
+  font: inherit; font-size: 13px; color: var(--ink);
+}
+.rn-err {
+  position: absolute; left: 8px; top: calc(100% + 4px);
+  font-size: 11.5px; color: var(--danger); background: var(--card);
+  padding: 2px 6px; border-radius: 5px; border: 1px solid var(--line-float);
+}
+
+/* 侧栏的搜索入口现在是个按钮（点了弹面板），不再是输入框 */
+button.side-search {
+  width: calc(100% - 16px); margin: 2px 8px 8px;
+  font: inherit; font-size: 13px; text-align: left; cursor: pointer;
+}
+button.side-search:hover { background: var(--hover); color: var(--ink); }
+.side-search .ss-label { flex: 1; color: var(--muted); }
+button.side-search:hover .ss-label { color: var(--ink); }
+
+/* ===== 快速搜索面板 ===== */
+.sp-mask {
+  position: fixed; inset: 0; z-index: 130;
+  background: rgba(15, 15, 15, .22);
+  display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh;
+}
+.sp {
+  /* 圆角 / 投影 / 边框交给文件末尾「浮层统一」那一段（要 !important 压 Crepe 主题），
+     这里只管尺寸和裁剪。 */
+  width: 620px; max-width: calc(100vw - 48px);
+  background: var(--card); overflow: hidden;
+}
+.sp-head { padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.sp-input {
+  width: 100%; border: none; outline: none; background: none; padding: 0;
+  font: inherit; font-size: 16px; color: var(--ink);
+}
+.sp-input::placeholder { color: var(--faint); }
+.sp-body { max-height: 52vh; overflow-y: auto; padding: 8px; }
+.sp-label { font-size: 11.5px; color: var(--faint); padding: 8px 8px 4px; }
+.sp-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 8px; border-radius: 6px; cursor: pointer;
+}
+.sp-row.on { background: var(--hover); }
+.sp-ico { display: inline-flex; color: var(--muted); flex: 0 0 auto; }
+.sp-ico svg { width: 16px; height: 16px; }
+.sp-name { flex: 0 1 auto; font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-time, .sp-meta { flex: 1; text-align: right; font-size: 12px; color: var(--faint); }
+.sp-arrow { display: inline-flex; color: var(--faint); }
+.sp-arrow svg { width: 14px; height: 14px; }
+.sp-empty { padding: 14px 10px; font-size: 13px; color: var(--faint); text-align: center; }
+.sp-foot {
+  padding: 8px 16px; border-top: 1px solid var(--line);
+  font-size: 11.5px; color: var(--faint);
+}
+
+/* 侧栏回收站分组 */
+.section-head .sec-count {
+  font-size: 11px; color: var(--faint); background: var(--hover-soft);
+  border-radius: 8px; padding: 1px 6px; margin-left: 2px;
+}
+/* 缩进对齐：FileTree 的行是 JSX 内联 paddingLeft = depth*14+8，
+   这两条是手写的 <div className="node">，没有那个内联值，就会掉回
+   .node .row 的 padding: 4px 6px（左边 6px），比别的行少 2px。
+   这里补回来：入口和顶层条目同深 8px，列表里的条目按子项深 22px。 */
+.tree .row.trash-entry { padding-left: var(--indent-first); }
+.tree .row.trash-row { padding-left: 26px; }   /* = --indent-first + --indent */
+
+/* pointer —— 这一行现在是可点的（点开预览）。目录例外，由 JSX 上按 isDir
+   覆盖回 default。高亮不用自己写：.node .row.active 已经有一套
+   （--row-active，和文件树里「当前打开的那篇」同款）。 */
+.tree .row.trash-row { cursor: pointer; }
+.tree .row.trash-row .name { flex: 0 1 auto; min-width: 0; }
+/* 时间贴着右边，和按钮之间留出间距；名字长了先截断名字 */
+.tree .row.trash-row .trash-time {
+  flex: 0 0 auto; margin-left: auto; padding-left: 10px;
+  font-size: 11px; color: var(--faint);
+}
+.tree .row.trash-row .row-actions { flex: 0 0 auto; margin-left: 4px; }
+/* 行内按钮别用 --faint（太淡，看着像两个空方块），默认 --muted，hover 才变深 */
+.tree .row.trash-row .row-actions button { color: var(--muted); }
+.tree .row.trash-row .row-actions button:hover { color: var(--ink); }
+.tree .row.trash-row:hover { background: var(--hover-soft); }
+.tree .row.trash-row:hover .trash-time { visibility: hidden; }  /* hover 时给按钮腾地方 */
+
+/* 「其它」里的回收站入口：一条 item，点开才列内容 */
+.tree .row.trash-entry { cursor: pointer; }
+/* 图标色和其它条目对齐（.icon.dir svg / .icon.file svg 用的就是这个灰）
+   别的条目 hover 也不加深图标，这里跟着一致 */
+.tree .row.trash-entry .icon.trash { color: var(--icon-dim); }
+/* 数量徽标：原来只有 margin，没写样式，于是继承 14px 正文色，看起来又大又黑。
+   补上 11px 徽标，字色/底色取淡红一档（--danger-ink / --danger-soft）——
+   回收站的数字是「待处理量」的提示，灰阶徽标看着像普通计数，红色才点得醒。 */
+.tree .row.trash-entry .sec-count {
+  flex: 0 0 auto; margin-left: 6px; font-size: 11px; color: var(--danger-ink);
+  background: var(--danger-soft); border-radius: 8px; padding: 1px 6px; line-height: 1.4;
+}
+
+/* 数量徽标 + 「清空」按钮：两者的位置槽（.trash-slot）。
+   徽标在流里（它的宽度决定槽宽），清空按钮绝对定位盖在同一格里 —— 这样
+   hover 时是「同一格里换内容」，而不是两个元素各占一格、左右推挤。
+   min-width/min-height 是给**折叠态**兜底的：那时不渲染徽标，槽里空的，
+   没有这行撑不出盒子，按钮就既看不见也 hover 不到。 */
+.tree .row.trash-entry .trash-slot {
+  position: relative; margin-left: auto;
+  min-width: 24px; min-height: 20px;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+/* 「清空回收站」：hover 槽位（= hover 数字）才淡入，同时把徽标淡出。
+   用 opacity 而不是 visibility —— 徽标淡出后仍占着位，槽宽不塌，
+   按钮也就一直有盒子可 hover（visibility:hidden 的话鼠标会穿过去）。 */
+.tree .row.trash-entry .trash-slot .sec-count {
+  margin-left: 0; transition: opacity .12s ease;
+}
+.tree .row.trash-entry .trash-slot .trash-acts {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity .12s ease;
+}
+.tree .row.trash-entry .trash-slot:hover .trash-acts { opacity: 1; pointer-events: auto; }
+.tree .row.trash-entry .trash-slot:hover .sec-count { opacity: 0; }
+.tree .row.trash-entry .trash-slot .trash-acts button {
+  width: 20px; height: 20px; border-radius: 4px; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  border: none; background: transparent; padding: 0; cursor: pointer;
+  transition: background .1s ease, color .1s ease;
+}
+.tree .row.trash-entry .trash-slot .trash-acts button svg { width: 15px; height: 15px; }
+.tree .row.trash-entry .trash-slot .trash-acts button:hover { background: var(--hover); color: var(--ink); }
+
+/* 分组标题里的折叠箭头是 hover 才淡入的（--faint），这里是常驻 item，
+   沿用那套会淡到看不见，换成 --muted */
+.tree .row.trash-entry .sec-chev { margin-left: auto; opacity: 1; color: var(--muted); }
+
+/* ===== ErrorBoundary 的兜底提示 ===== */
+.eb-crash {
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  margin: 40px auto; max-width: 520px; padding: 28px;
+  background: var(--card); border: 1px solid var(--line-float);
+  border-radius: 12px; box-shadow: var(--shadow-float); color: var(--ink);
+  font-size: 14px; text-align: center;
+}
+.eb-detail {
+  font-size: 12px; color: var(--danger); background: #fdf2f2;
+  border-radius: 6px; padding: 8px 10px; max-width: 100%;
+  word-break: break-all; text-align: left;
+}
+.eb-again {
+  border: 1px solid var(--line-strong); border-radius: 6px; background: #fff;
+  font: inherit; font-size: 13px; color: var(--ink); padding: 5px 14px; cursor: pointer;
+}
+.eb-again:hover { background: var(--hover-soft); }
+
+
+/* ===== #13 主题（配色方案）=====
+   主题 = **一整套配色**，每套自带亮 / 暗两个变体。
+   怎么和 #12 的「跟随系统 / 亮色 / 暗色」分工：
+     明暗（data-theme）决定用哪一套变体，配色（data-palette）决定用哪一族色。
+   选「米色 + 跟随系统」得到的是米色的暗色版，不是默认色的暗色版。
+
+   **每套主题只覆盖「带色相」的那几个变量**，半透明的叠加色
+   （--hover / --row-active / --mk-sel / --scrollbar…）**不覆盖** ——
+   它们要么是纯 alpha，要么亮色压黑、暗色压白，本来就自适应。
+   ⚠️ 这一条是这里唯一不重复真值的地方：真要每套都写全 46 个变量，
+   就是六份真值，改一个忘一个。
+
+   ⚠️ **主题只管颜色**：字体 / 圆角 / 密度都**不进主题**。它们和配色正交，
+   塞进来会让「主题数 × 字号 × 圆角」爆炸，而且这几个已经是独立设置项了。 */
+:root[data-palette="sepia"] {
+  --bg: #f6f1e4;
+  --side: #efe7d5;
+  --card: #fdfaf1;
+  /* 侧栏那张卡片要比窗口底**亮**一档。那 2px 切口是
+     `var(--side-ring)` = 窗口底色，卡片比窗口暗的话这道同色切口
+     就读成了一条夹在中间的**亮线**（用户 2026-10-13 报的「米色 sidebar 白边突兀」）。
+     默认纸白那边 #f9f9fa 只比 #ffffff 暗一丁点，所以看不出来。 */
+  --side-card: #fbf6e9;
+  --line: #e3dbc8;
+  --line-strong: #cdc2a8;
+  --line-float: #d6ccb4;
+  --ink: #4a3f2c;
+  --muted: #8c8069;
+  --faint: #b6ab95;
+  --item: #7d7159;
+  --icon-dim: #8c8069;
+  --on-card: #fffdf6;
+  --switch-track: #d6cdb5;
+  --find-hit: #ffd76a;
+  --find-hit-cur: #f0b400;
+  --crepe-color-primary: #8a6a3a;
+  --crepe-color-secondary: #e7dcc2;
+  --crepe-color-on-secondary: #40351f;
+  --crepe-color-inline-code: #a33a26;
+  --crepe-color-error: #a33a26;
+  --crepe-color-hover: #f0e9d8;
+  --crepe-color-selected: #e5dbc4;
+  --crepe-color-inline-area: #e9e0cb;
+}
+:root[data-theme="dark"][data-palette="sepia"] {
+  --bg: #1e1a13;
+  --side: #191610;
+  --card: #262117;
+  --side-card: #2b2519;
+  --line: #3a3225;
+  --line-strong: #524733;
+  --line-float: #453c2b;
+  --ink: #ece3cf;
+  --muted: #a3957a;
+  --faint: #6f6553;
+  --item: #b7aa8e;
+  --icon-dim: #a3957a;
+  --on-card: #f3ebd6;
+  --switch-track: #4c4231;
+  --switch-knob: #1e1a13;
+  --seg-on: #40372a;
+  --find-hit: #6b5313;
+  --find-hit-cur: #8f6a00;
+  --crepe-color-primary: #e6c58a;
+  --crepe-color-secondary: #3d3527;
+  --crepe-color-on-secondary: #e8dcc2;
+  --crepe-color-inline-code: #f0a58e;
+  --crepe-color-error: #f0a58e;
+  --crepe-color-hover: #2a2419;
+  --crepe-color-selected: #6d5a38;
+  --crepe-color-inline-area: #2e281c;
+}
+/* 冷灰（青灰） */
+:root[data-palette="slate"] {
+  --bg: #f6f8f9;
+  --side: #eef1f3;
+  --card: #ffffff;
+  --side-card: #f2f5f7;
+  --line: #e2e7ea;
+  --line-strong: #c4ccd2;
+  --line-float: #d3dade;
+  --ink: #2b3238;
+  --muted: #79838b;
+  --faint: #aeb6bc;
+  --item: #6b757d;
+  --icon-dim: #79838b;
+  --switch-track: #cbd3d9;
+  --find-hit: #ffe066;
+  --find-hit-cur: #ffc107;
+  --crepe-color-primary: #2f6f9e;
+  --crepe-color-secondary: #dceaf5;
+  --crepe-color-on-secondary: #16304a;
+  --crepe-color-inline-code: #b3261e;
+  --crepe-color-error: #b3261e;
+  --crepe-color-hover: #edf1f4;
+  --crepe-color-selected: #dde5ea;
+  --crepe-color-inline-area: #e6ecf0;
+}
+:root[data-theme="dark"][data-palette="slate"] {
+  --bg: #14181b;
+  --side: #101316;
+  --card: #1b2023;
+  --side-card: #1f2529;
+  --line: #2b3237;
+  --line-strong: #3f484f;
+  --line-float: #333b41;
+  --ink: #e3e8ec;
+  --muted: #93a0a8;
+  --faint: #616d75;
+  --item: #a3aeb5;
+  --icon-dim: #93a0a8;
+  --on-card: #e6ecef;
+  --switch-track: #3b454c;
+  --switch-knob: #14181b;
+  --seg-on: #333c42;
+  --find-hit: #6a5407;
+  --find-hit-cur: #8f6a00;
+  --crepe-color-primary: #8cc2ec;
+  --crepe-color-secondary: #2c3944;
+  --crepe-color-on-secondary: #d5e6f3;
+  --crepe-color-inline-code: #f2b8b0;
+  --crepe-color-error: #f2b8b0;
+  --crepe-color-hover: #1e2427;
+  --crepe-color-selected: #4a6472;
+  --crepe-color-inline-area: #262d32;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   文字颜色 / 背景色 取色面板
+   ══════════════════════════════════════════════════════════════ */
+.mk-color-pop {
+  z-index: 60;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel, #fff);
+  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+  font-size: 12px;
+}
+.mk-color-pop-title {
+  margin-bottom: 8px;
+  font-weight: 600;
+  color: var(--ink, #1f2328);
+}
+.mk-color-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.mk-color-sw {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid rgb(0 0 0 / 12%);
+  border-radius: 4px;
+  cursor: pointer;
+}
+.mk-color-sw:hover {
+  outline: 2px solid var(--accent, #0090ff);
+  outline-offset: 1px;
+}
+.mk-color-foot {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+.mk-color-custom {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--ink, #1f2328);
+}
+.mk-color-custom input[type="color"] {
+  width: 30px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: none;
+}
+.mk-color-clear,
+.mk-color-apply {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  color: var(--ink, #1f2328);
+  cursor: pointer;
+}
+.mk-color-apply {
+  width: 100%;
+  margin-top: 6px;
+}
+.mk-color-clear:hover,
+.mk-color-apply:hover {
+  background: var(--hover, rgb(0 0 0 / 5%));
+}
+
+/* ══════════════════════════════════════════════════════════════
+   文字颜色 / 背景色按钮的图标：把 Crepe 的 fill 强制还原成 stroke
+   ══════════════════════════════════════════════════════════════
+   Crepe 的图标全是 fill 路径，它的 CSS 里直接
+     .milkdown .milkdown-toolbar .toolbar-item svg { fill: var(--crepe-color-outline); }
+   （块菜单里那条同理）。lucide 是 stroke 风格，fill="none" 只是**表现属性**，
+   优先级最低，会被这条规则盖掉 → 整块填实，highlighter 糊成一坨，
+   看上去就像「图标根本没换」。
+   所以用 [data-lucide] 提一级特异性把 fill 还原，只影响我们自己的两个图标。 */
+.milkdown .milkdown-toolbar .toolbar-item svg[data-lucide],
+.milkdown .milkdown-slash-menu .menu-groups .menu-group li svg[data-lucide] {
+  fill: none;
+  stroke: currentColor;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   编辑器浮层：条目版式对齐我们自己的右键菜单
+   ══════════════════════════════════════════════════════════════
+   上面那段「浮层统一」只管了容器（圆角/边框/投影/字体族），
+   **条目本身**还是 Crepe 那一套：24px 图标、14px 上下内边距、
+   4px 圆角、600 字重、13.3px 字号。
+   我们自己的 .ctx 是 14px 图标 / 6px 8px / --r-md / 400 / 14px。
+   同一个应用里两种菜单并排出现时，一眼就能看出不是一套东西。
+
+   这里只改**度量**，不动配色 —— 配色继续走 Crepe 的 --crepe-color-*，
+   那套变量编辑器正文、选中区都在用，动它会把整个编辑器配色带偏。 */
+.milkdown .milkdown-toolbar,
+.milkdown .milkdown-slash-menu,
+.milkdown .milkdown-link-preview,
+.top-bar-heading-dropdown {
+  --mk-menu-font-size: 14px;
+  --mk-menu-icon: 14px;
+  --mk-menu-pad-y: 6px;
+  --mk-menu-pad-x: 8px;
+  --mk-menu-gap: 10px;
+  --mk-menu-radius: var(--r-md);
+  --mk-menu-min-w: 176px;
+}
+
+/* 斜杠菜单 / 块菜单的条目 */
+.milkdown .milkdown-slash-menu .menu-groups .menu-group li {
+  min-width: var(--mk-menu-min-w) !important;
+  gap: var(--mk-menu-gap) !important;
+  padding: var(--mk-menu-pad-y) var(--mk-menu-pad-x) !important;
+  border-radius: var(--mk-menu-radius) !important;
+  cursor: pointer;
+}
+/* 我们的 .ctx 是 400 字重；Crepe 给 li 里的 span 写死了 600。
+   标签页 / 分组里那排 600 的粗体太多，菜单条目跟着变粗会显得吵。 */
+.milkdown .milkdown-slash-menu .menu-groups .menu-group li > span {
+  font-size: var(--mk-menu-font-size) !important;
+  font-weight: 400 !important;
+}
+/* 分组标题：压到我们的小号弱化字，Crepe 是 14px/600 跟条目一样重 */
+.milkdown .milkdown-slash-menu .menu-groups .menu-group h6 {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 16px !important;
+  color: var(--faint) !important;
+  padding: 8px 0 2px !important;
+}
+/* 两组之间的那条分隔线：Crepe 用 4px 高的 color-mix，太重了 */
+.milkdown .milkdown-slash-menu .menu-groups .menu-group + .menu-group::before {
+  height: 1px !important;
+  background: var(--line) !important;
+  margin: 4px 0 !important;
+}
+
+/* 选中工具条是**图标按钮行**，不是菜单条目列表 ——
+   尺寸跟 .icon-btn 那一档（18px 图标 / 6px 圆角），
+   不是 .ctx 的 14px。实测 14px 在这一行里小得几乎看不见。 */
+/* ⚠️ 这里一度被我按「和 .ctx / .icon-btn 对齐」的原则调到 14px → 18px，
+   结果比 Crepe **出厂的 24px** 还小 40%，等于我自己造了个「图标太小」的 bug。
+   教训：设计 token 有语境，菜单行 / 侧栏按钮的尺寸不能直接搬到浮动工具条上；
+   要对齐也得对齐**观感**，而观感量的是墨迹（getBBox）不是盒子。 */
+.milkdown .milkdown-toolbar .toolbar-item {
+  width: 34px !important;
+  height: 34px !important;
+  margin: 0 1px !important;
+  padding: 4px !important;
+  border-radius: var(--mk-menu-radius) !important;
+}
+.milkdown .milkdown-toolbar .toolbar-item svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* 垂直居中 + 压高度。
+   ⚠️ 之前那一排浮在**上沿**、下面空一块，根因是这两个一起：
+     · .milkdown-toolbar 没有 align-items，flex 默认 stretch；
+       而我给 .toolbar-item 写了固定 height: 34px —— 一旦有固定高度，
+       stretch 就退化成**顶对齐**，按钮整体上移。
+     · 46px 的桶其实是**分隔线**撑的：它 height 24 + margin 10 = 44，
+       再加上下各 1px 边框。按钮只有 34px，比不过它。
+   所以：容器 align-items:center（按钮和分隔线一起居中），
+   分隔线去掉上下 margin、高度收到 20 —— 桶高随之从 46 掉到 36。 */
+.milkdown .milkdown-toolbar {
+  align-items: center !important;
+}
+.milkdown .milkdown-toolbar .divider {
+  height: 20px !important;
+  margin: 0 10px !important;
+  align-self: center !important;
+}
+/* 24px 下 stroke-2 和旁边的实心图标粗细基本对得上了。 */
+.milkdown .milkdown-toolbar .toolbar-item svg[data-lucide] {
+  stroke-width: 2;
+}
+
+/* 不管图标挂在哪个菜单里，都不许被 flex 容器拉变形。
+   flex:0 0 auto  —— 默认的 0 1 auto 允许它被压缩
+   align-self:center —— 外层一旦 align-items:stretch 就会把高度拉长，
+                        svg 缺 preserveAspectRatio 时会跟着变形 */
+.milkdown .milkdown-toolbar .toolbar-item svg,
+.milkdown .milkdown-slash-menu .menu-groups .menu-group li svg,
+.milkdown .milkdown-link-preview svg {
+  flex: 0 0 auto !important;
+  align-self: center !important;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+/* 链接预览面板 / 标题下拉里的条目同理 */
+.milkdown .milkdown-link-preview .link-edit .button svg,
+.milkdown .milkdown-link-preview .link-preview .link-icon > svg {
+  width: var(--mk-menu-icon) !important;
+  height: var(--mk-menu-icon) !important;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   文字颜色取色面板：容器也归到同一套浮层语言
+   ══════════════════════════════════════════════════════════════ */
+.mk-color-pop {
+  padding: 8px;
+  border: 1px solid var(--line-float);
+  border-radius: var(--radius-float);
+  background: var(--card);
+  box-shadow: var(--shadow-float);
+  font-family: var(--font-ui);
+  font-size: 14px;
+}
+.mk-color-pop-title {
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.mk-color-clear,
+.mk-color-apply {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  border-radius: var(--r-md);
+}
+
+/* ===== 设置面板：左索引和右侧标题的图标 =====
+   两侧用的是同一个 `icon` 字段（见 SET_SECS），所以尺寸只需要在这里钉一次。 */
+.set-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.set-nav-ico {
+  display: inline-flex;
+  flex: 0 0 15px;
+  width: 15px;
+  height: 15px;
+  color: var(--faint);
+}
+.set-nav-item.on .set-nav-ico { color: inherit; }
+.set-nav-ico svg { width: 15px; height: 15px; }
+
+.set-sec-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.set-sec-name > svg {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  color: var(--muted);
+}
+/* 「外观」里的二级标题（侧栏 / 排序）。它比分区名弱一档，
+   但不能弱到和分组说明文字混在一起 —— 用一条细线领起来更清楚。 */
+.set-sub {
+  margin: 22px 0 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.set-sub:first-of-type { margin-top: 14px; }
+
+/* ===== 快捷键清单（#10，只读）=====
+   按键固定一列、说明占剩下的：键数不一样（⌘K 两键 / Esc 一键 / 拖动两字），
+   不固定宽度的话每行的说明文字起点会参差不齐，读起来很难受。 */
+.set-keys { margin-bottom: 4px; }
+.set-keys .set-sub { margin-bottom: 6px; }
+.set-key-row {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 6px 0;
+}
+.set-key-row + .set-key-row { border-top: 1px solid var(--line-soft, var(--line)); }
+.set-key-combo {
+  flex: 0 0 108px;
+  display: flex; align-items: center; gap: 3px;
+  padding-top: 1px;
+}
+.set-key-combo kbd {
+  font-family: var(--font-ui); font-size: 11.5px; line-height: 18px;
+  color: var(--muted);
+  background: var(--hover-soft, rgb(0 0 0 / 4%));
+  border: 1px solid var(--line); border-bottom-width: 2px;
+  border-radius: 5px; padding: 0 5px;
+  white-space: nowrap;
+}
+.set-key-desc { flex: 1; min-width: 0; }
+.set-key-label { display: block; font-size: 13.5px; color: var(--ink); }
+.set-key-where { display: block; font-size: 11.5px; color: var(--faint); margin-top: 1px; }
+
+/* ===== 写入冲突弹窗（乐观锁命中时）=====
+   并排预览靠 .cfl-tabs 切换「我这份 / 磁盘那份」——同屏放两份长文会把弹窗撑到
+   屏外，所以只显示一份 + 一个切换，预览区自己滚。 */
+.cfl-dlg { width: 620px; max-width: calc(100vw - 48px); }
+.cfl-tabs { display: flex; gap: 4px; margin: 10px 0 6px; }
+.cfl-tabs button {
+  padding: 5px 10px; font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--muted); background: none;
+  border: 1px solid var(--line); border-radius: var(--r-md);
+}
+.cfl-tabs button.on { color: var(--ink); border-color: var(--line-strong); background: var(--hover-soft); }
+.cfl-body {
+  margin: 0; padding: 10px 12px; max-height: 42vh; overflow: auto;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
+  color: var(--ink);
+}
