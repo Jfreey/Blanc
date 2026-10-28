@@ -21,7 +21,7 @@ Blanc 长着一张 Notion 的脸，骨子里是一个文件夹。
 - **暗色是真的调过的。** 三套配色各自有亮/暗两版，选区、描边、投影都单独取值。
 - **安装包 12 MB。** 后端是一个零依赖的 Node 文件服务，不是一整套框架。
 
-![Blanc](docs/screenshot.png)
+![Blanc：左侧文件树，右侧 Markdown 正文，右缘是章节索引与大纲轨道](docs/screenshot.png)
 
 ## 它都会些什么
 
