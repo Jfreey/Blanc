@@ -257,10 +257,27 @@ export const api = {
       body: JSON.stringify({ root, from, to }),
     }).then(j),
 
-  /** 返回 {root, path, content, mtime}；mtime 是写入乐观锁的基准。 */
-  read: (root, rel) =>
-    fetch(`${API_BASE}/api/file?root=${encodeURIComponent(root)}&path=${encodeURIComponent(rel)}`)
-      .then((r) => r.json()),
+  /** 返回 {root, path, content, mtime}；mtime 是写入乐观锁的基准。
+   *
+   *  ⚠️ 非 2xx 必须**抛**，不能把 `{error:"文件不存在"}` 当数据返回（2026-10-29 修）。
+   *  以前这里只是个 `.then(r => r.json())`，404 也照收；调用方只看到「没有 content」，
+   *  只能报一句「文件内容为空响应」——真正的原因（侧栏那行是过时的，文件已被改名/移走）
+   *  就丢了，用户既不知道是哪一篇，也不知道该怎么办。 */
+  read: async (root, rel) => {
+    const r = await fetch(`${API_BASE}/api/file?root=${encodeURIComponent(root)}&path=${encodeURIComponent(rel)}`);
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      const e = new Error((data && data.error) || `HTTP ${r.status}`);
+      e.status = r.status;
+      throw e;
+    }
+    if (!data || typeof data.content !== "string") {
+      const e = new Error("响应里没有正文");
+      e.status = r.status;
+      throw e;
+    }
+    return data;
+  },
   /**
    * 写入。baseMtime 是这份内容**读到时**的 mtime；服务端对不上就回 409
    * （而不是覆盖）。返回 {ok, mtime}，或抛一个带 conflict:true 的对象。

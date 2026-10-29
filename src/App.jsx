@@ -3165,14 +3165,24 @@ loadTree(curRoot).then((t) => {
   const openFile = useCallback(async (node) => {
     if (dirty) showToast("请先等待自动保存完成");
     let data;
+    // 提示里用去掉 .md 的显示名，和侧栏、标题栏叫法一致
+    const label = String(node?.name || node?.rel || "这篇").replace(/\.md$/i, "");
     try {
       data = await api.read(curRoot, node.rel);
     } catch (e) {
-      showToast(`打开失败：${e.message || e}`);
+      /* 404 = 侧栏那一行过时了：文件在访达里被改名 / 移走 / 删掉，而树还是旧的。
+         光说「打不开」没用 —— 用户看不出说的是哪一篇，也没法修（2026-10-29 用户报）。
+         所以：报出文件名 + 顺手把树重拉一遍，让那行过期条目自己消失。 */
+      if (e?.status === 404) {
+        showToast(`「${label}」已经不在磁盘上了（可能被改名或移走），列表已刷新`);
+        loadTree(curRoot).catch(() => {});
+      } else {
+        showToast(`打开失败：「${label}」${e?.message || e}`);
+      }
       return;
     }
     // 读不到正文就别切文档：否则编辑器会变成空白，随后自动保存把空内容写回文件
-    if (typeof data?.content !== "string") { showToast("打开失败：文件内容为空响应"); return; }
+    if (typeof data?.content !== "string") { showToast(`打开失败：「${label}」读到的正文是空的`); return; }
     // 开着回收站预览时点开别的文件：预览要收掉。
     // 不收的话编辑区会停在 .trash/ 的内容上，而 `doc` 已经换成新文件了 ——
     // 面包屑指着 B 篇、正文显示的是回收站里的 A 篇，还以为打开失败。
@@ -3189,7 +3199,7 @@ loadTree(curRoot).then((t) => {
              id: ++docIdRef.current });
     setDirty(false);
     touchRecent(node.rel, node.name);
-  }, [curRoot, dirty, touchRecent]);
+  }, [curRoot, dirty, touchRecent, loadTree]);
   useEffect(() => { openFileRef.current = () => openFile(doc && { rel: doc.rel, name: doc.name }); });
 
   /* ---- 系统递过来的文件：先看它属于哪个知识库 ----
