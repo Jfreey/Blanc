@@ -2,6 +2,10 @@
   <img src="public/blanc-icon.svg" width="96" alt="Blanc">
   <h3>Blanc</h3>
   <p>本地优先的 Markdown 笔记。一篇一个窗口，笔记就是磁盘上的 .md 文件。</p>
+  <p>
+    <a href="https://github.com/Jfreey/Blanc/releases/latest"><b>下载 macOS 版 · 5 MB</b></a><br>
+    <sub>Apple Silicon · macOS 11+ · 需要系统里有 Node.js 18+</sub>
+  </p>
 </div>
 
 ---
