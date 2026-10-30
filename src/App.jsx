@@ -2624,12 +2624,16 @@ export default function App() {
   useEffect(() => () => clearTimeout(peekTimer.current), []);
 
   // 记一次「操作过」：同一篇只留最新时间，按知识库隔离
-  const touchRecent = useCallback((rel, name) => {
-    if (!rel || !curRoot) return;
+  /* rootArg 可以不传，默认用闭包里的 curRoot。传它是因为 openFile 里可能
+     正好落在 curRoot 还没提交的那一帧（双击 .md 开窗口就是这条路）：
+     那会儿闭包是 null，不传就整条都不记了。openFile 手上已经有最新的 root。 */
+  const touchRecent = useCallback((rel, name, rootArg) => {
+    const root = rootArg || curRoot;
+    if (!rel || !root) return;
     const rest = (uiPrefs.get().recent || [])
-      .filter((r) => !(r.root === curRoot && r.rel === rel));
+      .filter((r) => !(r.root === root && r.rel === rel));
     uiPrefs.set({
-      recent: [{ root: curRoot, rel, name, ts: Date.now() }, ...rest].slice(0, RECENT_KEEP),
+      recent: [{ root, rel, name, ts: Date.now() }, ...rest].slice(0, RECENT_KEEP),
     });
     setRecTick((n) => n + 1);
   }, [curRoot]);
@@ -2985,7 +2989,14 @@ export default function App() {
      curRoot，两者排在同一个提交里，清除会跑在打开**之后**，把刚打开的文档又清掉。
      放在「切」这个动作里做，没有时序问题。 */
   const curRootRef = useRef(null);
-  useEffect(() => { curRootRef.current = curRoot; }, [curRoot]);
+  /* ⚠️ 这里**不要**再挂 `useEffect(() => { curRootRef.current = curRoot }, [curRoot])`
+     （2026-10-30 删掉的那行）。ref 由 setCurRoot **同步**维护，state 只是它的镜像。
+     那个 effect 在每次渲染提交后无条件把 ref 写回 state，而 setCurRoot 是
+     「先改 ref、再把 setState 排进队列」，两者之间就存在一个 ref 被回退成旧值的窗口。
+     用户双击 .md 开独立窗口时正好撞进去：openFile 拿到的是 null，
+     请求变成 `GET /api/file?root=null&path=...`，后端只能回「这个知识库不在配置里」
+     —— 体感就是「在访达里双击自己的笔记，打不开，还说库没了」。
+     全项目只有 setCurRoot 会直接写 state，所以不必再同步一次。 */
   const setCurRoot = useCallback((p) => {
     /* 同一个库就什么都不做。
        必须幂等：refreshRoots 在「窗口获得焦点」时也会跑，它内部要 setCurRoot，
@@ -3061,6 +3072,13 @@ export default function App() {
     return () => window.removeEventListener("keydown", onKey, true);
   }, [paletteOpen]);
 
+  /* 「启动时那条系统路径已经问过了没有」（2026-10-30）。
+     桌面版首帧是 false：opened_file() 是异步的，等它回来才知道这次启动有没有
+     被双击过来一篇。在那之前**不许自动打开第一篇** —— 否则第一篇先落地、
+     系统那篇后到，用户看到的就是「双击 A，窗口里是 B」。
+     浏览器里没有这回事，直接算已就绪。 */
+  const [bootSettled, setBootSettled] = useState(() => !inTauriShell());
+
   // 初始化
   useEffect(() => {
     setLoadErr("");
@@ -3080,7 +3098,7 @@ loadTree(curRoot).then((t) => {
           pendingKbOpenRef.current = null;
           const node = flatten(t.folders, [...t.files]).find(
             (n) => n.type === "file" && n.rel === want.rel);
-          if (node) { openFile(node); return; }
+          if (node) { openFile(node, true); return; }
         }
         /* 外部文件窗口**不自动打开知识库里的第一篇**（2026-10-16 修「外部文件打不开」）。
          URL 上的 ?ext= 已经说明这个窗口要显示的是库外文件，这里再开一篇，
@@ -3091,11 +3109,22 @@ loadTree(curRoot).then((t) => {
          openedFile() 递过来的文件没有 ?ext=，那时 bootExternal 还是 false，
          只能靠 docRef —— 见上面 docRef 的说明。两个一起才把竞态堵死。 */
       if (bootExternal) return;
+      /* 门闩开着 = 系统正让我开某篇（见 openFromSystem）。这时切库是它引起的，
+         别拿「第一篇」去抢 —— 抢了就变成「双击 A，打开 B」。 */
+      if (systemOpenSeqRef.current > 0) return;
+      /* 还没问过 opened_file()（桌面版首帧就是）：这会儿开第一篇等于跟系统
+         那篇抢跑。等 bootSettled 变 true 这个 effect 会重跑，那时再决定 ——
+         如果系统真给了文件，doc 已经有内容，`!doc` 自然挡住；没给才轮到第一篇。 */
+      if (!bootSettled) return;
+      /* 系统这轮已经点过名（autoOpenedRef 有值）：那这篇「第一篇」纯属多余，
+         它一开就会把用户双击的那篇顶下去。这是最后一道闸 —— 前面的 bootSettled
+         只管「问没问过」，管不到「问了而且真要开」。 */
+      if (autoOpenedRef.current) return;
       const first = flatten(t.folders, [...t.files])[0];
       if (first && !doc && !externalClaimedRef.current) openFile(first);
     }).catch((e) => setLoadErr(`载入文件列表失败：${e.message || e}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curRoot]);
+  }, [curRoot, bootSettled]);
 
   /* ---- 知识库之外的「外部文档」----
    * 从 Finder 双击 / 拖进来的 .md 往往不在任何知识库根目录下，
@@ -3162,33 +3191,63 @@ loadTree(curRoot).then((t) => {
   const autoOpenedRef = useRef(null);
 
   // 「以磁盘为准」要用它重开当前篇；挂到 ref 上免得 onReloadDoc 拿到旧闭包
-  const openFile = useCallback(async (node) => {
+  /* 每次 openFile 领一个号（2026-10-30）。冷启动双击 .md 时会有**两次**打开
+     在并行：一次是切库 effect 里的「自动打开第一篇」，一次是系统递过来那篇。
+     两次各自 await，先发起的如果后回来，就会把用户真正要的那篇顶掉 ——
+     表现是「在访达双击 A，窗口里是 B」。领号之后只认最新那一次的结果，
+     过期回来的直接丢弃（包括它的报错，别拿一个没人关心的错去弹 toast）。 */
+  const openSeqRef = useRef(0);
+  /* 最近一次「系统点名要开的那篇」的号。双击 .md 走的就是这种：
+     用户已经在访达里指定了要哪一篇，别的打开不许把它顶掉 —— 哪怕它先回来。
+     没有这个的话，「自动打开第一篇」和「系统递过来那篇」谁后回来谁赢，
+     实测结果就是「双击 A，窗口里是 B」。 */
+  const forceSeqRef = useRef(0);
+  const openFile = useCallback(async (node, force) => {
     if (dirty) showToast("请先等待自动保存完成");
     let data;
     // 提示里用去掉 .md 的显示名，和侧栏、标题栏叫法一致
     const label = String(node?.name || node?.rel || "这篇").replace(/\.md$/i, "");
+    /* 库用 ref 取的**最新**值，不用闭包里那个 curRoot（2026-10-30）。
+       双击 .md 开独立窗口时，这个回调可能来自 curRoot 还是 null 的那一帧；
+       闭包里的 null 会一路变成 `?root=null`，后端只好说「这个知识库不在配置里」。
+       ref 由 setCurRoot 同步写，永远是最新值。 */
+    const root = curRootRef.current || curRoot;
+    if (!root) {
+      // 真的还没有库：与其发一个必错的请求，不如说清楚现在缺什么
+      showToast(`「${label}」打不开：还没选中知识库`);
+      return;
+    }
+    const seq = ++openSeqRef.current;
+    if (force) forceSeqRef.current = seq;
+    /* 这次打开还算不算数：自己后面又有人开了（seq 变了），或者自己不是被点名的那次、
+       而后面来了一次点名的打开。两种情况都该安静退出，别把正文换掉。 */
+    const stale = () => seq !== openSeqRef.current || (!force && forceSeqRef.current > seq);
     try {
-      data = await api.read(curRoot, node.rel);
+      data = await api.read(root, node.rel);
     } catch (e) {
+      // 已经有更新的一次打开在跑：这次的结果（包括报错）都不再有人要了
+      if (stale()) return;
       /* 404 = 侧栏那一行过时了：文件在访达里被改名 / 移走 / 删掉，而树还是旧的。
          光说「打不开」没用 —— 用户看不出说的是哪一篇，也没法修（2026-10-29 用户报）。
          所以：报出文件名 + 顺手把树重拉一遍，让那行过期条目自己消失。 */
       if (e?.status === 404) {
         showToast(`「${label}」已经不在磁盘上了（可能被改名或移走），列表已刷新`);
-        loadTree(curRoot).catch(() => {});
+        loadTree(root).catch(() => {});
       } else if (e?.status === 400) {
         /* 库对不上（2026-10-30 用户报「打开失败：「话题探索日志」非法路径」）：
            这个窗口记着的 root 已经不在后端配置里了 —— 多半是另一个窗口把它移除/
            改名了，或者 config.json 被手改过。此时干看着一句服务端的错什么也做不了，
            所以顺手重拉知识库列表：refreshRoots 发现当前库失效会自己切到还能用的那个，
            侧栏跟着重扫，用户再点一下就能打开。 */
-        showToast(`打开失败：「${label}」${e?.message || e}。已重新加载知识库列表`);
+        showToast(`打开失败：「${label}」${e?.message || e}${e?.root !== undefined ? `（这个窗口记的库是 ${JSON.stringify(e.root)}）` : ""}。已重新加载知识库列表`);
         refreshRoots().catch(() => {});
       } else {
         showToast(`打开失败：「${label}」${e?.message || e}`);
       }
       return;
     }
+    // 期间又有一次打开：这次的内容已经过期，别拿它去覆盖更新的那篇
+    if (stale()) return;
     // 读不到正文就别切文档：否则编辑器会变成空白，随后自动保存把空内容写回文件
     if (typeof data?.content !== "string") { showToast(`打开失败：「${label}」读到的正文是空的`); return; }
     // 开着回收站预览时点开别的文件：预览要收掉。
@@ -3198,7 +3257,7 @@ loadTree(curRoot).then((t) => {
     /* created / updated 来自 /api/tree 的 fs.stat（server 的 scan() 现在会带），
        属性面板的「创建时间 / 更新时间」两行直接用 —— 它们**不进 frontmatter**，
        那是文件系统的事实，写进文件只会变成一份对不上的副本。 */
-    setDoc({ root: curRoot, rel: node.rel, content: data.content,
+    setDoc({ root, rel: node.rel, content: data.content,
              name: String(node.name || "").replace(/\.md$/i, ""),
              created: node.created, updated: node.updated,
              // 读到时的 mtime —— 写入乐观锁的基准，由 EditorPane 保存后回填。
@@ -3206,7 +3265,7 @@ loadTree(curRoot).then((t) => {
              mtime: data.mtime || 0,
              id: ++docIdRef.current });
     setDirty(false);
-    touchRecent(node.rel, node.name);
+    touchRecent(node.rel, node.name, root);
   }, [curRoot, dirty, touchRecent, loadTree, refreshRoots]);
   useEffect(() => { openFileRef.current = () => openFile(doc && { rel: doc.rel, name: doc.name }); });
 
@@ -3255,7 +3314,9 @@ loadTree(curRoot).then((t) => {
       const t = await loadTree(hit.root).catch(() => null);
       const node = t && flatten(t.folders, [...t.files]).find(
         (n) => n.type === "file" && n.rel === hit.rel);
-      if (node) { openFile(node); return; }
+      // await：让调用方（openFromSystem）等到正文真的进了 doc 再收工，
+      // 启动阶段「要不要自动打开第一篇」就靠这个先后顺序判断
+      if (node) { await openFile(node, true); return; }
       showToast(`打不开：${hit.rel} 不在这个知识库里`);
       return;
     }
@@ -3321,6 +3382,12 @@ loadTree(curRoot).then((t) => {
     }
   }, [kbOffer, refreshRoots, resolveInRoots, openAsLibrary, showToast]);
 
+  /* 「系统正在让我开某篇」的门闩（2026-10-30）。大于 0 表示 openFromSystem
+     正在跑：它一上来 await refreshRoots() 就会改 curRoot，而改 curRoot 会让
+     切库 effect 里的「自动打开第一篇」立刻触发 —— 那一下会跟真正要打开的那篇
+     抢，最后谁先 read 回来就显示谁（实测就是「双击 A 打开了 B」）。 */
+  const systemOpenSeqRef = useRef(0);
+
   /* 系统给了一条路径。warm = 是不是应用已在运行时。
    * 冷启动必须用 openExternal 在**本窗口**打开（主窗口是系统必定打开的那个，
    * 再开一个就变成两个窗口了）；运行中才另开窗口，那是一篇一窗口的意义。
@@ -3328,14 +3395,23 @@ loadTree(curRoot).then((t) => {
    * 命中知识库时一律走主窗口（切库 + 打开），不分冷热 ——
    * 知识库文件的价值就在侧栏上，另开一个没侧栏的窗口等于白开。 */
   const openFromSystem = useCallback(async (absPath, warm) => {
-    /* ⚠️ 一定要用**刚拉回来的**列表判归属，不能用 state 里的 roots。
+    /* 开一个门闩：这期间「系统让我开某篇」正在进行，切库 effect 里那句
+       「自动打开第一篇」必须让路（2026-10-30 用户报的另一半）。
+       原因是 openFromSystem 一上来就 await refreshRoots()，它会顺手 setCurRoot，
+       而 setCurRoot 一改，下面那个 [curRoot] effect 立刻跑起来 —— 那时 openAsLibrary
+       还没把目标篇交出去，effect 看到 doc 还是 null，就把**第一篇**开了。
+       两个 openFile 各自在 await read，最后落地的往往是先发的那个，
+       表现成「在访达双击 A，打开的是 B」。 */
+    systemOpenSeqRef.current += 1;
+    try {
+      /* ⚠️ 一定要用**刚拉回来的**列表判归属，不能用 state 里的 roots。
        冷启动时前端刚挂载，refreshRoots 还在路上，roots 是空数组 ——
        此时判断必然落到「库外文件」。实测踩过：双击 Blanc Notes 里的
        VibeCoding1.md，却弹出「这个文件夹不在知识库里」，而它明明就是
        当前库（用户 2026-10-18 截图里那个弹窗）。 */
-    const list = await refreshRoots();
-    let hit = resolveInRoots(absPath, list);
-if (!hit) {
+      const list = await refreshRoots();
+      const hit = resolveInRoots(absPath, list);
+      if (!hit) {
       /* 库外文件：**照常打开**，同时在角落里挂一条可点的提示（用户 2026-10-18 定的
          「不打断」）。原来这里先 await 一个模态确认框，等于系统递进来的一个文件
          能把用户手头正做的事盖住 —— 文件已经能看了，问与不问不该挡路。
@@ -3358,7 +3434,13 @@ if (!hit) {
       }
       return;
     }
-    await openAsLibrary(hit);
+      await openAsLibrary(hit);
+    } finally {
+      /* 门闩放到 openAsLibrary 返回之后：它内部那次 openFile 已经 await 到了
+         响应（或者已经失败退出），这会儿再放开，切库 effect 里的
+         「自动打开第一篇」就不会再来抢。 */
+      systemOpenSeqRef.current -= 1;
+    }
   }, [resolveInRoots, refreshRoots, offerFromPath, openAsLibrary, openExternal, showToast]);
 
   /* 角标的**不变量**：只有当本窗口正显示着那篇文件时它才允许存在。
@@ -3386,15 +3468,36 @@ if (!hit) {
   }
 
   // 启动时系统交过来的文件 + 运行中又打开的文件。只有**主窗口**接管。
+  /* `opened_file` 只在**这个窗口第一次挂载**时问一次（2026-10-30）。
+     Rust 那边 `OPENED` 取走不清空（lib.rs 的注释说明是为了 HMR 重挂载还能再问），
+     而这里的 effect 依赖 openFromSystem，后者又会随 curRoot / openFile 变化重建 ——
+     于是每切一次库就问一次，每次问回来的都是**上一次**打开的那条路径，
+     然后把它当「系统让我开这篇」开出来，顶掉用户刚点的那篇。
+     实测：打开 A，300ms 后窗口里变成 B（B 就是上次那条）。 */
+  const openedAskedRef = useRef(false);
   useEffect(() => {
     if (isDocWindowRef.current) return;                    // 独立窗口：URL 说了算
     let alive = true;
     const open = (p, warm) => {
-      if (!alive || !p || autoOpenedRef.current === p) return;
+      if (!alive || !p || autoOpenedRef.current === p) return Promise.resolve();
       autoOpenedRef.current = p;
-      openFromSystem(p, warm);
+      /* 必须把 openFromSystem 的 promise 交出去：下面 finally 里 setBootSettled(true)
+         要等这次打开**真的落地**（openFile 的 setDoc 完成），否则它会在读文件
+         之前就放行，effect 一看 doc 还是空的，又把第一篇开了。 */
+      return openFromSystem(p, warm);
     };
-    desktop.openedFile().then((p) => open(p, false));      // 冷启动：主窗口自己接管
+    if (!openedAskedRef.current) {
+      openedAskedRef.current = true;
+      desktop.openedFile()
+        .then((p) => open(p, false))                     // 冷启动：主窗口自己接管
+        .catch(() => {})
+        /* 不管有没有路径，都要放行「自动打开第一篇」那一步：
+           有路径时 doc 已经填上，`!doc` 会挡住；没路径才轮得到第一篇。 */
+        .finally(() => setBootSettled(true));
+    } else {
+      // 重挂载（effect 因 openFromSystem 变化而重跑）：已经问过了，别再问第二遍
+      setBootSettled(true);
+    }
     const un = desktop.onOpenFile((p) => open(p, true));   // 运行中：Rust emit 的
     return () => { alive = false; Promise.resolve(un).then((f) => f && f()); };
   }, [openFromSystem]);
@@ -3461,7 +3564,7 @@ if (!hit) {
     // 文件不存在（被删/被移走）：不静默停着，直接进主界面让用户看到侧栏
     if (!hit) { p.done = true; showToast(`要打开的文件不在了：${p.rel}`); return; }
     p.done = true;
-    openFile(hit);
+    openFile(hit, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tree, curRoot]);
 

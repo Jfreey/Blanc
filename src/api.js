@@ -264,11 +264,23 @@ export const api = {
    *  只能报一句「文件内容为空响应」——真正的原因（侧栏那行是过时的，文件已被改名/移走）
    *  就丢了，用户既不知道是哪一篇，也不知道该怎么办。 */
   read: async (root, rel) => {
+    /* 空库不发请求（2026-10-30）。不拦的话 encodeURIComponent(null) 会变成字符串
+       "null"，后端只能回一句「这个知识库不在配置里」—— 说的是实话，但离真正的原因
+       （调用方那一刻手上没有库）隔了好几层，排查时最费时间。 */
+    if (!root) {
+      const e = new Error("还没有选中知识库");
+      e.status = 0;
+      throw e;
+    }
     const r = await fetch(`${API_BASE}/api/file?root=${encodeURIComponent(root)}&path=${encodeURIComponent(rel)}`);
     const data = await r.json().catch(() => null);
     if (!r.ok) {
       const e = new Error((data && data.error) || `HTTP ${r.status}`);
       e.status = r.status;
+      /* 服务端把收到的 root 一并回显（见 server.mjs 的 badRoot）。
+         调用方要能把它摆到提示里：只说「这个库不在配置里」而说不出是哪个，
+         用户没法把它和自己看到的侧栏对上，也就没法告诉我们（2026-10-30）。 */
+      if (data && data.root !== undefined) e.root = data.root;
       throw e;
     }
     if (!data || typeof data.content !== "string") {
