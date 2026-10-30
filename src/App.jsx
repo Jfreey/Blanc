@@ -3020,6 +3020,11 @@ export default function App() {
     await pickSetupRoot(picked);
   }, [pickSetupRoot]);
 
+  /* 「上次看到的目录结构版本号」。服务端每个库挂了 fs.watch，结构一变就 +1
+     （见 server.mjs 的 /api/tree/rev）；这里只比对数字，变了才重拉树。
+     -1 = 还没建基线（刚切库），那一拍只记录、不刷新。 */
+  const treeRevRef = useRef(-1);
+
   const loadTree = useCallback(async (rootPath) => {
     /* 先用上次的树把侧栏铺出来（几百毫秒的空白期没了），再等真实扫描替换。
        不能 return 缓存：调用方要的是**最新**树（自动打开第一篇、找刚改名的那篇）。 */
@@ -3035,6 +3040,9 @@ export default function App() {
     ]);
     setTree(t);
     setOrderMap(o || {});
+    /* 刚扫出来的这份就是基线：把这时的版本号记下来，轮询下一拍不会
+       因为「数字和 -1 不一样」而再拉一遍（切库时会白拉两次）。 */
+    if (t && typeof t.rev === "number") treeRevRef.current = t.rev;
     writeTreeCache(rootPath, t, o || {});
     return t;
   }, []);
@@ -3455,6 +3463,54 @@ loadTree(curRoot).then((t) => {
     // 只跟着「打开的是哪一篇」重建；dirty / 内容这些都从 ref 里取
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [doc?.root, doc?.rel]);
+
+  /* 侧栏也跟着磁盘走（2026-10-30 用户报：往知识库里加了文件，左侧菜单不刷新）。
+     以前树的刷新时机全都绑在**前端自己的动作**上（切库、新建、改名、删除），
+     别人往目录里放东西（访达里拖进去、别的编辑器导出、iCloud 回写）这里毫无感知。
+     现在后端每个库挂了 fs.watch，结构一变就把版本号 +1；这一拍只问那个数字
+     （几十字节），变了才去拉整棵树 —— 直接轮询 /api/tree 等于按秒重扫全库。
+     节拍和上面盯文件那套一致：可见 1.5 秒 / 后台 8 秒，切回窗口补一拍。
+     只有**结构**变了才会刷新（内容改动不算，见 server 的 treeSignature），
+     所以在这里打字、保存都不会让侧栏闪。 */
+  useEffect(() => {
+    if (!curRoot) { treeRevRef.current = -1; return; }
+    /* 切库那一刻树刚被 loadTree 拉过，版本号也顺手记了基线；
+       置 -1 只是防「上一轮的数字恰好和这一轮相同」时误判。 */
+    treeRevRef.current = -1;
+    let alive = true, timer = 0, busy = false;
+
+    const tick = async () => {
+      if (!alive || busy) return;
+      busy = true;
+      try {
+        const r = await api.treeRev(curRoot);
+        if (!alive || !r || typeof r.rev !== "number") return;
+        const first = treeRevRef.current === -1;
+        if (r.rev === treeRevRef.current) return;
+        treeRevRef.current = r.rev;
+        /* 第一拍只建基线，不刷新：这一拍之前刚 loadTree 过（也可能是上面
+           loadTree 里的那次赋值没赶上），再拉一遍纯属浪费。
+           之后数字一动，就是磁盘上的结构真变了。 */
+        if (first) return;
+        await loadTree(curRoot);
+      } catch {
+        /* 后端重启 / 库被拔掉 / 旧版本没有这个接口：静默跳过，下一拍再看 */
+      } finally {
+        busy = false;
+        if (alive) timer = setTimeout(tick, document.hasFocus() ? 1500 : 8000);
+      }
+    };
+
+    timer = setTimeout(tick, 1200);      // 别和切库那次 loadTree 撞在同一帧
+    /* 切回窗口补一拍：后台那一拍可能是 8 秒前的，用户切回来正想看新加的文件 */
+    const wake = () => { if (!alive) return; clearTimeout(timer); timer = setTimeout(tick, 60); };
+    window.addEventListener("focus", wake);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      window.removeEventListener("focus", wake);
+    };
+  }, [curRoot, loadTree]);
 
   /* ---- 系统递过来的文件：先看它属于哪个知识库 ----
    *

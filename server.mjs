@@ -7,7 +7,7 @@
 // 环境: BLANC_CONFIG 配置文件 | BLANC_DIR 默认知识库目录 | PORT 端口（默认 8787）
 
 import http from "node:http";
-import { promises as fs } from "node:fs";
+import { promises as fs, watch as fsWatch } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -195,6 +195,124 @@ async function scan(dir, prefix = "") {
   folders.sort((a, b) => a.name.localeCompare(b.name, "zh"));
   files.sort((a, b) => a.name.localeCompare(b.name, "zh"));
   return { folders, files };
+}
+
+/* ===== 目录树版本号（2026-10-30）=====
+ *
+ * 用户报：「知识库内有文件添加时，左侧的菜单并不能立即刷新」。
+ * 根因：树只在前端**自己**做事之后才拉（切库、新建、改名、删除），别人往磁盘里
+ * 放东西（访达里拖进去、别的编辑器导出、iCloud 回写）前端完全不知道 —— 得手动
+ * 换个库再切回来才看得见。
+ *
+ * 做法：每个库挂一个 fs.watch(recursive)，**结构**变了（多了 / 少了 / 改名）
+ * 就把版本号 +1。前端轮询这个数字（`{"rev":3}`，十几个字节），变了才拉整棵树。
+ *
+ * 为什么不让前端直接轮询 /api/tree：那要每次重新 scan 整个库（每篇都 stat）再把
+ * 整棵树传过去 —— 1520 篇的库单次就是几十毫秒 + 几十 KB，按秒级轮询等于让磁盘
+ * 一直转。版本号接口只回一个已经算好的数字。
+ *
+ * 为什么内容改动不算「结构变了」：签名只喂「类型 + 相对路径」，不含 mtime / size。
+ * 否则自己每保存一次都会把侧栏刷一遍 —— 树没变，白闪。
+ *
+ * 为什么要额外兜底扫描：`recursive: true` 在 macOS / Windows 是原生支持的，
+ * Linux 要 Node 20+；网络盘（SMB、坚果云、iCloud 占位文件）还经常漏事件。
+ * 挂不上 watch 就退化成「2.5 秒最多扫一次」；挂上了也留一条 30 秒的兜底自愈。
+ * 两种情况下接口形状一样，只是新鲜度不同。
+ */
+const TREE_REV = new Map();     // abs root -> 下面那个结构
+const REV_DEBOUNCE_MS = 250;    // 一次保存会连发好几个事件，攒一下再扫
+const REV_FALLBACK_MS = 2500;   // 没有 watch 时：最多这么久重扫一次
+const REV_SAFETY_MS = 10000;    // 有 watch 也漏（新目录里的文件、网络盘）：兜底重扫
+
+function revState(abs) {
+  let s = TREE_REV.get(abs);
+  if (!s) {
+    s = { rev: 0, sig: null, watcher: null, timer: 0, busy: false, pending: false, lastScan: 0, failedAt: 0 };
+    TREE_REV.set(abs, s);
+  }
+  return s;
+}
+
+/* 结构签名：djb2 哈希 + 节点数。只看「哪些路径、是文件还是目录」。
+   节点数一起进签名是为了让撞哈希不至于表现成「改了但没刷新」。 */
+function treeSignature(tree) {
+  let h = 5381, n = 0;
+  const feed = (s) => { for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; };
+  const walk = (nodes) => {
+    for (const node of nodes) {
+      feed(node.type === "dir" ? "d" : "f");
+      feed(node.rel);
+      n++;
+      if (node.type === "dir" && Array.isArray(node.children)) walk(node.children);
+    }
+  };
+  walk([...(tree.folders || []), ...(tree.files || [])]);
+  return `${h}:${n}`;
+}
+
+/* 拿到一份刚扫出来的树：更新基线，结构真变了才增版本号。
+   `bump=false` 用于 /api/tree —— 那份树是**因为有人在拉树**才扫的，
+   它就是调用方马上要看到的东西，拿它当基线即可，不该再触发一次刷新。 */
+function noteTree(abs, tree, bump = true) {
+  const s = revState(abs);
+  const sig = treeSignature(tree);
+  if (s.sig !== null && sig !== s.sig && bump) s.rev += 1;
+  s.sig = sig;
+  s.lastScan = Date.now();
+}
+
+async function rescanRev(abs) {
+  const s = revState(abs);
+  /* 正在扫的时候又来了事件：**排队再来一次**，不能直接丢掉。
+     丢掉的话这次变化就只剩兜底扫描那一条路可走了（实测：mkdir 紧跟着往新目录里
+     写文件，两个事件挤在同一个 debounce 窗口里，前一次扫描还没回来）。 */
+  if (s.busy) { s.pending = true; return; }
+  s.busy = true;
+  try {
+    let tree;
+    // 库暂时读不到（拔盘、权限弹窗、目录刚被删）：保持旧签名不动，
+    // 否则一次失败就当成「全没了」，侧栏会整片闪空
+    try { tree = await scan(abs); } catch { return; }
+    noteTree(abs, tree);
+  } finally {
+    s.busy = false;
+    s.lastScan = Date.now();
+    if (s.pending) { s.pending = false; rescanRev(abs).catch(() => {}); }
+  }
+}
+
+function ensureTreeWatch(abs) {
+  const s = revState(abs);
+  if (s.watcher) return s;
+  // 挂过一次失败就先歇 10 秒：网络盘/权限问题上每次轮询都 try 一次很浪费
+  if (Date.now() - s.failedAt < 10000) return s;
+  try {
+    /* persistent:false —— 这个 watcher 不该把进程钉死（后端是随 app 起的，
+       退出由 Tauri 那侧管）。unref 的 timer 同理。 */
+    const w = fsWatch(abs, { recursive: true, persistent: false }, () => {
+      clearTimeout(s.timer);
+      s.timer = setTimeout(() => { rescanRev(abs).catch(() => {}); }, REV_DEBOUNCE_MS);
+      if (s.timer.unref) s.timer.unref();
+    });
+    w.on("error", () => {
+      try { w.close(); } catch { /* 已经关了 */ }
+      if (s.watcher === w) s.watcher = null;
+      s.failedAt = Date.now();
+    });
+    s.watcher = w;
+  } catch {
+    s.failedAt = Date.now();     // Linux < 20 / 网络盘 / 目录不在：走轮询扫描
+  }
+  return s;
+}
+
+/* 库被移除 / 改名时收摊，别留着一个盯着不存在目录的 watcher */
+function disposeTreeWatch(abs) {
+  const s = TREE_REV.get(abs);
+  if (!s) return;
+  clearTimeout(s.timer);
+  try { s.watcher && s.watcher.close(); } catch { /* 已关 */ }
+  TREE_REV.delete(abs);
 }
 
 const server = http.createServer(async (req, res) => {
@@ -559,6 +677,7 @@ const server = http.createServer(async (req, res) => {
       if (j < 0) return send(404, JSON.stringify({ error: "未知知识库" }));
       ROOTS.splice(j, 1);
       delete ROOT_ICONS[abs];
+      disposeTreeWatch(abs);   // 留着它会一直盯一个已经不归我们管的目录
       if (!SINGLE_ROOT) await saveRoots();
       return send(200, JSON.stringify({ ok: true, roots: ROOTS }));
     }
@@ -592,7 +711,33 @@ const server = http.createServer(async (req, res) => {
     if (p === "/api/tree" && req.method === "GET") {
       const abs = rootFromParam(url.searchParams.get("root"));
       if (!abs) return send(404, JSON.stringify({ error: "未知知识库" }));
-      return send(200, JSON.stringify({ root: abs, ...(await scan(abs)) }));
+      /* 顺手把 watch 挂上、把这次的结果当签名基线：调用方拿到的就是最新结构，
+         没必要再让版本号动一次（见 noteTree 的 bump 参数）。
+         顺序是先挂 watch 再 scan —— 反过来的话，scan 期间进来的文件既不在树里、
+         也没有事件通知，得等下一轮兜底扫描才出现。 */
+      ensureTreeWatch(abs);
+      const tree = await scan(abs);
+      noteTree(abs, tree, false);
+      return send(200, JSON.stringify({ root: abs, rev: revState(abs).rev, ...tree }));
+    }
+
+    /* 只回一个版本号：{ rev }。前端拿到它在秒级轮询，只有数字变了才去拉上面的
+       /api/tree —— 这一条的开销是「一次全库扫描（有 watch 时通常免了）」或
+       「一个几十字节的响应」，比裸轮询整棵树便宜两三个数量级。 */
+    if (p === "/api/tree/rev" && req.method === "GET") {
+      const rootParam = url.searchParams.get("root");
+      const abs = rootFromParam(rootParam);
+      if (!abs) return send(400, badRoot(rootParam));
+      const s = ensureTreeWatch(abs);
+      /* 挂上了 watch 就靠事件推进，只在超过兜底间隔时自己扫一遍；
+         挂不上（Linux 老版本 / 网络盘 / 目录暂时不在）就按 REV_FALLBACK_MS 轮扫。 */
+      const gap = s.watcher ? REV_SAFETY_MS : REV_FALLBACK_MS;
+      if (Date.now() - s.lastScan >= gap) await rescanRev(abs);
+      res.writeHead(200, {
+        "Content-Type": "application/json; charset=utf-8",
+        "Cache-Control": "no-store",   // 「问现在」的接口，任何缓存都会让刷新失效
+      });
+      return res.end(JSON.stringify({ rev: s.rev, watched: !!s.watcher }));
     }
 
     /* 轻量探测：只回 mtime / size，**不读正文**。

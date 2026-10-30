@@ -235,7 +235,21 @@ export const api = {
       body: JSON.stringify({ root, kind, value, color: kind === "svg" ? color || "" : "" }),
     }).then(j),
 
+  /* 返回 {root, rev, folders, files}。rev 是服务端的「结构版本号」，
+     拿到它顺手记成基线，免得下一次轮询以为结构刚变过（见 treeRev）。 */
   tree: (root) => fetch(`${API_BASE}/api/tree?root=${encodeURIComponent(root)}`).then(j),
+
+  /** 只问「目录结构变了没有」，回 `{rev, watched}`（2026-10-30）。
+   *  服务端每个库挂了 fs.watch，增删改名就 +1；前端轮询这个数字，
+   *  变了才去拉 tree —— 裸轮询 tree 等于每次重扫全库 + 传整棵树。
+   *  watched=false 表示这台机器上没挂上 watch（老 Linux / 网络盘），
+   *  服务端会退化成定时重扫，数字照样会动，只是慢一点。 */
+  treeRev: async (root) => {
+    if (!root) return null;
+    const r = await fetch(`${API_BASE}/api/tree/rev?root=${encodeURIComponent(root)}`, { cache: "no-store" });
+    if (!r.ok) return null;
+    return r.json().catch(() => null);
+  },
 
   /* ---- 手动排序（#6）----
      order 是「rel → 同级内序号」，存 <库>/.order/_index.json。

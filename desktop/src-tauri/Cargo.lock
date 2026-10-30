@@ -263,7 +263,7 @@ dependencies = [
 
 [[package]]
 name = "blanc"
-version = "0.1.11"
+version = "0.1.12"
 dependencies = [
  "core-foundation",
  "objc2",
