@@ -4,7 +4,7 @@ import { editorViewCtx } from "@milkdown/kit/core";
 import { NodeSelection, Plugin, PluginKey, TextSelection } from "@milkdown/kit/prose/state";
 import { Fragment, Slice } from "@milkdown/kit/prose/model";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
-import { $prose } from "@milkdown/kit/utils";
+import { $prose, replaceAll } from "@milkdown/kit/utils";
 import { colorMarkPlugins } from "./colorMarks.jsx";
 import ColorPalette, {
   makeColorOpener, applyColor, iconSvg, COLOR_ICON_KEYS,
@@ -41,7 +41,7 @@ const DEFAULT_TITLE = "未命名";
 // titleIconEl / hasTitleIcon / onPickIcon 由 App 传入：图标的实际绘制（CustomIcon 依赖
 // 懒加载的 lucide 全量）留在 App 一处，EditorPane 不重复实现，避免两份图标解析逻辑漂移。
 function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
-                       onConflict, onSaveError, onReloadDoc,
+                       onConflict, onSaveError, onReloadDoc, onApi,
                        titleIconEl, hasTitleIcon, onPickIcon, smileyEl, showIconUi = true, onScrolledChange,
                        onTitleCommit, onTitleFlush, onTitleCancel,
                        showRail, showOutline, showMini, readOnly = false, preview = false,
@@ -161,6 +161,81 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
     try { return crepeRef.current?.getMarkdown() ?? savedRef.current; }
     catch { return savedRef.current; }
   };
+
+  /* ---- 外部改动（2026-10-30）----
+   * App 在停留于某一篇时轮询 /api/stat，磁盘 mtime 一变就把新内容递进来。
+   * 这里负责「怎么换」和「换的时候别把自己搅进保存流程」：
+   *
+   *   · applyExternal —— 这边没有未保存内容：**原地**换掉文档，不重开这一篇。
+   *     走 openFile 重开的话 doc.id 会变、EditorPane 整体重建，滚动位置回顶部 ——
+   *     而用户多半只是停在中间读，这正是「静默刷新」最不该发生的事。
+   *   · conflictFor  —— 这边有未保存内容：不替用户选，构造一个和 409 一样的
+   *     对照对象交给 App 弹面板（带 diff）。
+   *
+   * applyingRef 是**闸门**：replaceAll 会触发 markdownUpdated，那一瞬间
+   * md !== savedRef，不拦住就会被当成「用户编辑了」→ 标脏 → 800ms 后写盘，
+   * 等于刚同步完就把磁盘那份又覆盖回去。
+   */
+  const applyingRef = useRef(false);
+  const impRef = useRef(null);
+  impRef.current = {
+    /** 编辑器里的全文（含 frontmatter），跟磁盘那份逐字比对用 */
+    getText: () => (propsBrokenRef.current
+      ? `---\n${propsBrokenRef.current}---\n${currentMd()}`
+      : joinFrontmatter(propsRef.current, currentMd())),
+
+    /** 静默替换成磁盘那份；返回 false = 编辑器还没建好，交给下一轮 */
+    applyExternal: (md, mtime) => {
+      const crepe = crepeRef.current;
+      if (!crepe) return false;
+      const fm = splitFrontmatter(md);
+      const scroller = scrollRef.current;
+      const top = scroller ? scroller.scrollTop : 0;
+      applyingRef.current = true;
+      try {
+        crepe.editor.action(replaceAll(fm.body));
+      } catch (e) {
+        applyingRef.current = false;
+        console.error("[blanc] 外部改动替换失败", e);
+        return false;
+      }
+      // 属性面板、保存基准、脏标记，一起对齐到磁盘那份
+      setPropsTable(fm.props);
+      propsRef.current = fm.props;
+      setPropsBroken(fm.broken ?? "");
+      propsBrokenRef.current = fm.broken ?? "";
+      savedRef.current = md;
+      mtimeRef.current = mtime || 0;
+      touchedRef.current = false;
+      handlers.current.onDirtyChange?.(false);
+      handlers.current.onSaved?.(mtime);
+      // replaceAll 是同步 dispatch，DOM 已经换完，可以立刻放回阅读位置
+      if (scroller) scroller.scrollTop = top;
+      // listener 可能在这之后还有一次回调，下一帧再解闸
+      requestAnimationFrame(() => { applyingRef.current = false; });
+      return true;
+    },
+
+    /** 有未保存内容时：把两边交给 App，弹和 409 一样的对照面板 */
+    conflictFor: (theirs, theirsMtime, kind = "external") => ({
+      kind,
+      rel: doc.rel,
+      mine: impRef.current.getText(),
+      theirs,
+      theirsMtime,
+      reload: async () => { await handlers.current.onReloadDoc?.(); },
+      force: async () => {
+        const text = impRef.current.getText();
+        const r = doc.external
+          ? await desktop.write(doc.rel, text, 0)
+          : await api.write(doc.root, doc.rel, text, 0);
+        if (r && r.mtime) mtimeRef.current = r.mtime;
+        savedRef.current = text;
+        handlers.current.onSaved?.(r?.mtime);
+      },
+    }),
+  };
+  useEffect(() => { onApi?.(impRef.current); });
 
   const doSave = (md) => {
     // 预览模式：任何写盘都不允许。
@@ -344,6 +419,9 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
       // 跳过的话用户第一次输入不会落盘（实测：打完第一个字，编辑器里有、磁盘上没有）。
       listener.markdownUpdated((_ctx, md, prev) => {
         if (dead || md === prev) return;
+        /* 外部改动刚被换成正文（applyExternal）—— 这次回调不是用户输入，
+           不标脏、不排保存，否则会把刚同步进来的磁盘内容又写回去一遍。 */
+        if (applyingRef.current) return;
         touchedRef.current = true;
         handlers.current.onDirtyChange?.(md !== savedRef.current);
         // 字数统计跟着正文走。markdownUpdated 每次击键都触发，

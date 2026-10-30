@@ -595,6 +595,29 @@ const server = http.createServer(async (req, res) => {
       return send(200, JSON.stringify({ root: abs, ...(await scan(abs)) }));
     }
 
+    /* 轻量探测：只回 mtime / size，**不读正文**。
+       前端要在停留于某一篇时轮询「磁盘上有没有别人改过」，走 /api/file 的话
+       每次都要把整篇读出来 —— 实测 13 KB 的笔记读全文 4.6 ms、stat 只有 0.017 ms，
+       频率一高（1.5 秒一次 × 多个窗口）差距就出来了。
+       no-store：这是「问现在」的接口，任何缓存都会让轮询失效。 */
+    if (p === "/api/stat" && req.method === "GET") {
+      const absRoot = rootFromParam(url.searchParams.get("root"));
+      if (!absRoot) return send(400, badRoot(url.searchParams.get("root")));
+      const relParam = url.searchParams.get("path") || "";
+      const abs = safeJoin(absRoot, relParam);
+      if (!abs) return send(400, badPath(relParam));
+      try {
+        const st = await fs.stat(abs);
+        res.writeHead(200, {
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        });
+        return res.end(JSON.stringify({ mtime: Math.floor(st.mtimeMs), size: st.size }));
+      } catch {
+        return send(404, JSON.stringify({ error: "文件不存在" }));
+      }
+    }
+
     if (p === "/api/file" && req.method === "GET") {
       const absRoot = rootFromParam(url.searchParams.get("root"));
       if (!absRoot) return send(400, badRoot(url.searchParams.get("root")));

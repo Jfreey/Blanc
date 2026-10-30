@@ -290,6 +290,21 @@ export const api = {
     }
     return data;
   },
+  /** 只问「磁盘上这份的 mtime 是多少」，不读正文（2026-10-30 静默刷新用）。
+   *  停留在一篇上时前端按秒级轮询它，比对 mtime 决定要不要读全文 ——
+   *  比每轮都调 read() 便宜三个数量级（stat 0.017 ms vs 读 13 KB 4.6 ms）。
+   *  文件不在了回 404，调用方按「这篇被删了」处理，不要当成错误弹窗。 */
+  stat: async (root, rel) => {
+    if (!root) return { mtime: 0, size: 0 };
+    const r = await fetch(`${API_BASE}/api/stat?root=${encodeURIComponent(root)}&path=${encodeURIComponent(rel)}`,
+      { cache: "no-store" });
+    if (!r.ok) {
+      const e = new Error(`HTTP ${r.status}`);
+      e.status = r.status;
+      throw e;
+    }
+    return r.json();
+  },
   /**
    * 写入。baseMtime 是这份内容**读到时**的 mtime；服务端对不上就回 409
    * （而不是覆盖）。返回 {ok, mtime}，或抛一个带 conflict:true 的对象。

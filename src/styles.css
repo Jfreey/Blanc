@@ -138,6 +138,10 @@ svg { width: 16px; height: 16px; flex: none; }
   --danger: #e03e3e;
   --danger-ink: #d0574a;
   --danger-soft: rgba(224, 62, 62, 0.10);
+  /* 差异视图的「新增」色（冲突面板的 diff 页）。删除直接借用上面的 danger 系列，
+     新增原来没有对应的一支 —— 拿强调色顶会和链接、选区混在一起。 */
+  --diff-add: #2f7d4f;
+  --diff-add-soft: rgba(47, 125, 79, 0.10);
   /* 右侧悬浮三件套（导航条 / 大纲面板 / 右下角保存胶囊）共用的右缘留白。
      三者分别定位在 .editor-wrap 和 .main 里，但这两个容器的右缘是同一条线，
      所以靠这一个变量对齐 —— 之前是 30px / 0 / 10px 三个各写各的，看着像散着长的。 */
@@ -1195,6 +1199,27 @@ button.tb-item.act:hover { background: var(--hover-soft); }
 .save-float.stats-only::before { display: none; }
 /* 统计成了第一个孩子：前面没有东西可分隔，去掉竖线和左侧留白 */
 .save-float > .doc-stats:first-child { padding-left: 0; border-left: none; }
+/* 「磁盘有新版本」：磁盘上这一篇被别处改了，而这边的输入还没保存时挂出来。
+   父级 .save-float 是 pointer-events:none（它只是状态，不该挡正文点击），
+   所以这里必须自己打开，否则点不动。
+   黄色小圆点沿用「保存中」那颗的颜色 —— 两者都是「还没落定的状态」。 */
+.ext-chip {
+  pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 20px; padding: 0 9px 0 7px; margin-left: -2px;
+  font: inherit; font-size: 11.5px; line-height: 1;
+  color: var(--ink);
+  background: var(--hover-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ext-chip::before {
+  content: ""; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--warn); flex: 0 0 5px;
+}
+.ext-chip:hover { background: var(--hover); }
 /* 字数统计更淡，避免和「保存中」抢注意力；竖线分隔 */
 .doc-stats {
   color: var(--faint); font-variant-numeric: tabular-nums;
@@ -2332,6 +2357,9 @@ html[data-wide] .editor-skeleton { max-width: none; padding-inline: var(--ed-pad
   --danger: #ff7b72;
   --danger-ink: #ffa198;
   --danger-soft: rgba(255, 123, 114, .16);
+  /* 暗底上的新增行：亮绿才跳得出来，同 danger 反过来调一档 */
+  --diff-add: #7ad19a;
+  --diff-add-soft: rgba(122, 209, 154, .14);
 
   /* 查找高亮：亮色是明黄，暗底上明黄会**刺眼且盖住字** —— 改成深琥珀，
      底色压暗、由浅色的 --ink 压在上面反而更清楚。 */
@@ -3232,3 +3260,31 @@ button.side-search:hover .ss-label { color: var(--ink); }
   font-size: 12px; line-height: 1.6; white-space: pre-wrap; word-break: break-word;
   color: var(--ink);
 }
+/* 「差异」页：两列行号 + 变化行整行着色。
+   行号列用 tabular-nums，几十行的数字才不会左右跳。 */
+.cfl-diff {
+  max-height: 42vh; overflow: auto; padding: 6px 0;
+  background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-md);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px; line-height: 1.65;
+  font-variant-numeric: tabular-nums;
+}
+.cfl-line { display: flex; white-space: pre-wrap; word-break: break-word; }
+.cfl-no {
+  flex: 0 0 38px; text-align: right; padding-right: 8px;
+  color: var(--faint); font-size: 11px; user-select: none;
+}
+.cfl-txt { flex: 1; min-width: 0; padding-right: 10px; }
+.cfl-sign { display: inline-block; width: 13px; color: var(--faint); }
+.cfl-line.add { background: var(--diff-add-soft); }
+.cfl-line.add .cfl-txt,
+.cfl-line.add .cfl-sign { color: var(--diff-add); }
+.cfl-line.del { background: var(--danger-soft); }
+.cfl-line.del .cfl-txt { color: var(--danger-ink); }
+.cfl-line.del .cfl-sign { color: var(--danger); }
+.cfl-line.skip { color: var(--faint); font-size: 11.5px; }
+.cfl-badge {
+  margin-left: 6px; font-size: 11px; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.cfl-line.skip .cfl-badge { color: var(--faint); }

@@ -21,6 +21,9 @@ import { ICON_CATS, PICK_ICON_KEYS, findIcon } from "./pickIcons";
  * 体积从 47KB 降到 4.8KB，vite 会把它内联进产物。 */
 import appIconUrl from "../desktop/src-tauri/icons/icon128.png";
 import { ErrorBoundary } from "./ErrorBoundary";
+/* 行级差异：冲突面板的「差异」页要显示「对方到底改了哪儿」。
+   自己实现（见 diffLines.js 里的说明），零依赖、几千行也就 1 ms。 */
+import { diffLines } from "./diffLines.js";
 
 // 图标：整套用 Lucide（ISC，24×24 描边，strokeWidth 2.4 —— 默认的 2 比原来那套
 // Radix 细一档，加到 2.4 才对得上）。原始 SVG 从 Iconify 的 lucide 集取，
@@ -1412,24 +1415,52 @@ const IconPicker = ({ node, rect, current, onCancel, onPick, out }) => {
  *   丢弃 = 丢「我自己」（在编辑器里敲了半天的东西）
  * 程序没有资格替人做这个决定，所以**不自动选、不自动合并**。
  * 并排摆出来是为了让用户至少看得见自己在丢什么。 */
+/* 写入冲突 / 外部改动到达时的对照面板。
+ *
+ * 2026-10-30 之前只有两个 tab：「我这份」「磁盘上那份」——**整篇**切换。
+ * 用户报「没法看到另一个版本改了什么，不好做决断」：两版各看一遍、自己拿眼睛比，
+ * 一篇长笔记根本比不出来。所以加了默认打开的「差异」页：行级对比、只列改动块，
+ * 顶上给出 +N / −M 的行数摘要。
+ *
+ * kind：
+ *   · "save"     —— 保存被 409 拒了（编辑中的自动保存撞上别人的改动）
+ *   · "external" —— 停留在这篇上时检测到磁盘变了，而这边还有没保存的内容
+ * 两者动作相同（以磁盘为准 / 以我的为准），只是措辞和来源不同。 */
 function ConflictDialog({ c, onClose }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
-  const [side, setSide] = useState("mine");
+  const [side, setSide] = useState("diff");
   const run = async (fn) => {
     setBusy(true); setErr("");
     try { await fn(); onClose(); } catch (e) { setErr(e?.message || String(e)); setBusy(false); }
   };
   const text = side === "mine" ? c.mine : c.theirs;
+  /* 每次都算一遍会卡：弹窗只在打开时挂载，diff 只跑一次（内容最多几千行，实测 1 ms）。 */
+  const diff = useMemo(() => {
+    try { return diffLines(c.mine || "", c.theirs || "", 3); }
+    catch { return { rows: [], added: 0, removed: 0, tooBig: true }; }
+  }, [c.mine, c.theirs]);
+  const external = c.kind === "external";
   return (
     <div className="dlg-mask">
       <div className="dlg cfl-dlg">
-        <div className="dlg-title">这篇已被其它地方修改</div>
+        <div className="dlg-title">{external ? "磁盘上这份已经变了" : "这篇已被其它地方修改"}</div>
         <div className="dlg-msg">
-          「{c.rel}」在你编辑期间被别处改过了（多半是另一个窗口）。
-          继续保存会覆盖对方那份。挑一边吧 —— <b>程序不会替你合并</b>。
+          {external ? (
+            <>「{c.rel}」在磁盘上被改过（多半是另一个窗口，或你用别的编辑器存了），
+              而你这边还有没保存的内容。先看差异，再决定留哪一份 —— <b>程序不会替你合并</b>。</>
+          ) : (
+            <>「{c.rel}」在你编辑期间被别处改过了（多半是另一个窗口）。
+              继续保存会覆盖对方那份。先看差异，再决定留哪一份 —— <b>程序不会替你合并</b>。</>
+          )}
         </div>
         <div className="cfl-tabs">
+          <button className={side === "diff" ? "on" : ""} onClick={() => setSide("diff")}>
+            差异
+            {diff.added || diff.removed
+              ? <span className="cfl-badge">{`+${diff.added} −${diff.removed}`}</span>
+              : null}
+          </button>
           <button className={side === "mine" ? "on" : ""} onClick={() => setSide("mine")}>
             我这份（未保存）
           </button>
@@ -1437,7 +1468,32 @@ function ConflictDialog({ c, onClose }) {
             磁盘上那份
           </button>
         </div>
-        <pre className="cfl-body">{text || "（空）"}</pre>
+        {side === "diff" ? (
+          diff.tooBig ? (
+            <div className="cfl-body">文本太长，没法逐行比对。切到上面两个页签看全文。</div>
+          ) : diff.rows.length === 0 ? (
+            <div className="cfl-body">两份内容其实一样（可能只是文件被重新写过）。</div>
+          ) : (
+            <div className="cfl-diff">
+              {diff.rows.map((r, i) => (
+                r.t === "skip" ? (
+                  <div className="cfl-line skip" key={i}><span className="cfl-no" /><span className="cfl-txt">{`⋯ 未改动 ${r.count} 行`}</span></div>
+                ) : (
+                  <div className={"cfl-line " + r.t} key={i}>
+                    <span className="cfl-no">{r.t === "add" ? "" : r.aNo}</span>
+                    <span className="cfl-no">{r.t === "del" ? "" : r.bNo}</span>
+                    <span className="cfl-txt">
+                      <span className="cfl-sign">{r.t === "add" ? "+" : r.t === "del" ? "−" : " "}</span>
+                      {r.text || "\u00a0"}
+                    </span>
+                  </div>
+                )
+              ))}
+            </div>
+          )
+        ) : (
+          <pre className="cfl-body">{text || "（空）"}</pre>
+        )}
         {err && <div className="dlg-err">{err}</div>}
         <div className="dlg-btns">
           <button onClick={onClose} disabled={busy}>先不处理</button>
@@ -2212,6 +2268,16 @@ export default function App() {
      但「以磁盘为准」要重开当前篇 —— 那是 openFile，所以用一个 ref 兜住闭包。 */
   const [conflict, setConflict] = useState(null);
   const openFileRef = useRef(null);
+  /* ---- 外部改动同步（2026-10-30）----
+   * 停留在一篇上时，磁盘上的同一篇被别处改动过 —— 以前这件事**完全无声**：
+   * 读文件只在打开时发生，乐观锁又只在保存那一刻比对，所以「我不编辑，它就永远不知道」。
+   *   · extApiRef      EditorPane 递过来的 getText / applyExternal / conflictFor
+   *   · knownMtimeRef  最后一次「已知」的磁盘 mtime（打开时、保存后、同步后都刷）
+   *   · externalUpdate 磁盘上有新版本、但这边有没保存的输入时挂起的待处理项
+   */
+  const extApiRef = useRef(null);
+  const knownMtimeRef = useRef(0);
+  const [externalUpdate, setExternalUpdate] = useState(null);
   // 对话框的淡出：setDlg(null) = 直接卸载，来不及播退场动画（删除确认、清空回收站
   // 这类都是「消失得比出现快」，看着像闪了一下）。改成先挂 .dlg-mask-out 播完
   // .12s 淡出再卸载。
@@ -3310,9 +3376,85 @@ loadTree(curRoot).then((t) => {
              mtime: data.mtime || 0,
              id: ++docIdRef.current });
     setDirty(false);
+    // 换了一篇：外部改动同步的基准跟着换，上一篇挂起的提示也作废
+    knownMtimeRef.current = data.mtime || 0;
+    setExternalUpdate(null);
     touchRecent(node.rel, node.name, root);
   }, [curRoot, dirty, touchRecent, loadTree, refreshRoots]);
   useEffect(() => { openFileRef.current = () => openFile(doc && { rel: doc.rel, name: doc.name }); });
+
+  /* dirty 的镜像：下面那个轮询 effect 只在「换了一篇」时重建（依赖 doc.rel），
+     不能把 dirty 写进依赖 —— 那样每敲一个字就重建定时器，
+     轮询等于永远等不到下一拍。所以用 ref 读最新值。 */
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+
+  /* 停留在一篇上时盯着磁盘（2026-10-30）。
+     别人改了同一篇 —— 另一个窗口、别的编辑器、git 切分支、iCloud 回写 ——
+     以前这里完全没有感知：读文件只在打开时发生，乐观锁只在**保存**那一刻比对，
+     所以「我不改它，它就永远不知道磁盘变了」。用户报的就是这个。
+     只做「发现」和「怎么落地」，判断依据：
+       · 内容其实一样（只是 mtime 变了）→ 只挪基准，不动 DOM
+       · 这边没有未保存输入 → 原地替换，保住滚动位置
+       · 这边有未保存输入   → **不打断**，挂一条提示，点开是带 diff 的对照面板
+     1.5 秒一次 / 窗口在后台时 8 秒一次；wkwebview 对不可见窗口本来就有限流。
+     代价参考：stat 单次 0.017 ms，读一篇 13 KB 的全文 4.6 ms（只在 mtime 变了才读）。 */
+  useEffect(() => {
+    const d = doc;
+    if (!d || d.external) return;        // 库外文件没有轻量 stat 接口，先不盯
+    const root = d.root, rel = d.rel;
+    let alive = true;
+    let timer = 0;
+    let busy = false;
+
+    const tick = async () => {
+      if (!alive || busy) return;
+      busy = true;
+      try {
+        const st = await api.stat(root, rel);
+        if (!alive || !st || !st.mtime || st.mtime === knownMtimeRef.current) return;
+        const data = await api.read(root, rel);
+        if (!alive || !data || typeof data.content !== "string") return;
+        const imp = extApiRef.current;
+        if (!imp) return;
+
+        if (data.content === imp.getText()) {
+          knownMtimeRef.current = data.mtime || st.mtime;
+          setExternalUpdate((u) => (u && u.rel === rel ? null : u));
+          return;
+        }
+        if (dirtyRef.current) {
+          const m = data.mtime || st.mtime;
+          // 同一个 mtime 只挂一次，别每 1.5 秒都 setState 触发一轮重渲染
+          setExternalUpdate((u) => (u && u.rel === rel && u.mtime === m
+            ? u
+            : { rel, theirs: data.content, mtime: m }));
+          return;
+        }
+        if (imp.applyExternal(data.content, data.mtime || st.mtime)) {
+          knownMtimeRef.current = data.mtime || st.mtime;
+          setExternalUpdate(null);
+          showToast("已同步磁盘上的修改");
+        }
+      } catch { /* 文件被删 / 后端重启：静默跳过，下一拍再看 */ }
+      finally {
+        busy = false;
+        if (alive) timer = setTimeout(tick, document.hasFocus() ? 1500 : 8000);
+      }
+    };
+
+    timer = setTimeout(tick, 500);       // 切到这一篇先查一次，别等满一拍
+    /* 切回窗口立刻查：后台那一拍可能是 8 秒，用户切回来时不该还看旧内容 */
+    const wake = () => { clearTimeout(timer); timer = setTimeout(tick, 0); };
+    window.addEventListener("focus", wake);
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+      window.removeEventListener("focus", wake);
+    };
+    // 只跟着「打开的是哪一篇」重建；dirty / 内容这些都从 ref 里取
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc?.root, doc?.rel]);
 
   /* ---- 系统递过来的文件：先看它属于哪个知识库 ----
    *
@@ -4622,13 +4764,25 @@ loadTree(curRoot).then((t) => {
             readOnly={false} preview findTick={findTick} showProps={false} />
         ) : doc ? (
           <EditorPane key={doc.id} doc={doc}
-            onSaved={() => { setDirty(false); touchRecent(doc.rel, doc.name); }}
+            /* 存盘后把「已知 mtime」推到最新：轮询拿它当基准，
+               不推的话每一拍都会把「自己刚写的那一次」当成别人的改动。 */
+            onSaved={(m) => {
+              setDirty(false);
+              if (m) knownMtimeRef.current = m;
+              touchRecent(doc.rel, doc.name);
+            }}
+            /* 外部改动的入口（getText / applyExternal / conflictFor）。
+               只存进 ref，不触发渲染。 */
+            onApi={(a) => { extApiRef.current = a; }}
             /* 存盘后刷新属性面板的「更新时间」（只对库外文件有意义，
                库内那份来自 /api/tree，下次拉树自然更新）。 */
             onDocTime={(ms) => setDoc((d) => (d && d.external ? { ...d, updated: ms } : d))}
-            onConflict={setConflict}
+            /* 保存被 409 拒了：它自带磁盘上的最新内容，右下角那条
+               「磁盘有新版本」的提示就该撤掉 —— 否则两个入口说的是同一件事，
+               而且对照面板会叠两层。 */
+            onConflict={(c) => { setConflict(c); setExternalUpdate(null); }}
             onSaveError={(e) => showToast(`保存失败：${e?.message || e}`)}
-            onReloadDoc={async () => { setConflict(null); await openFileRef.current?.(); }}
+            onReloadDoc={async () => { setConflict(null); setExternalUpdate(null); await openFileRef.current?.(); }}
             onFlushSave={(fn) => (saveFlushRef.current = fn)}
             onDirtyChange={setDirty}
             onStats={pushStats}
@@ -4658,12 +4812,26 @@ loadTree(curRoot).then((t) => {
             统计那半只显示勾中的那几项，任一半关掉时对应的不渲染，两半都关整个胶囊不挂载。
             stats-only：状态点(::before)属于「已保存」那一半，没了状态点要跟着没，
             不然会剩一颗没有主语的绿点。 */}
-        {doc && (showSaveFlag || docStats.length > 0) && (
+        {doc && (showSaveFlag || docStats.length > 0 || externalUpdate) && (
           <span className={"save-float"
             + (dirty && showSaveFlag ? " dirty" : "")
             + (!showSaveFlag ? " stats-only" : "")}>
             {showSaveFlag && (
               <span className="save-flag">{dirty ? "保存中…" : "已保存"}</span>
+            )}
+            {/* 磁盘上有新版本、但这边还有没保存的输入：不替换、不弹模态，
+                只在这里挂一枚可点的提示。点开是带 diff 的对照面板 ——
+                用户 2026-10-30 说的「看不到对方改了什么，不好决断」就是这一条。 */}
+            {externalUpdate && (
+              <button className="ext-chip"
+                title="磁盘上这一篇被改过了，点开看差异"
+                onClick={() => {
+                  const imp = extApiRef.current;
+                  if (!imp) return;
+                  setConflict(imp.conflictFor(externalUpdate.theirs, externalUpdate.mtime, "external"));
+                }}>
+                磁盘有新版本 ›
+              </button>
             )}
             {docStats.length > 0 && (
               /* 左边距 + 竖线是「跟在保存状态后面」的分隔，单开时前面没有东西可分隔 ——
@@ -4786,7 +4954,7 @@ loadTree(curRoot).then((t) => {
       {dlg && <Dialog dlg={dlg} out={dlgOut} onClose={closeDlg} />}
       {/* 写入冲突。放在 App 这层是因为它要能触发「重新打开当前篇」——
           那是 openFile，不是编辑器内部能做的事。 */}
-      {conflict && <ConflictDialog c={conflict} onClose={() => setConflict(null)} />}
+      {conflict && <ConflictDialog c={conflict} onClose={() => { setConflict(null); setExternalUpdate(null); }} />}
       </>
       )}
     </div>
