@@ -771,7 +771,46 @@ function Drawer({ open, children, className = "" }) {
 
 function FileTree({ node, depth, root, openFile, active, onCreate, onDelete, onMenu, depthMax = 8, activeName, icons,
   dnd = null }) {
-  const [open, setOpen] = useState(depth < 1);
+  /* 当前打开的这一篇是不是就在这个文件夹**底下**。
+     深层文件夹里的笔记被打开时，路径上每一级都得展开 —— 否则正文换了、
+     侧栏还停在折叠态，看不出这篇到底在哪（用户 2026-10-30 报：手动展开
+     能看到那行是 active 的，但不会自己开）。
+     逐级生效：父级一展开才挂载子级，子级用同一个判据算初值，自然一路开到底。 */
+  const holdsActive = !!active && node.type === "dir" && active !== node.rel && isUnder(node.rel, active);
+  const [open, setOpen] = useState(depth < 1 || holdsActive);
+  /* 只在 active **新落到**自己子树里那一刻展开一次。
+     之后用户手动把这一层折起来，任何重渲染都不该把它弹开 —— 所以比较的是
+     上一个 active，不是「有没有 active」。 */
+  const prevActiveRef = useRef(active);
+  useEffect(() => {
+    if (holdsActive && prevActiveRef.current !== active) setOpen(true);
+    prevActiveRef.current = active;
+  }, [active, holdsActive]);
+
+  /* 展开之后把那一行带进视野：从「最近」或访达打开深层笔记时，树是开在
+     折叠态的位置上的，光展开、行还在可视区外面，等于没定位。
+     只滚 .tree 自己（不碰整页），只在被挡住时动，已经在视野里就不晃。 */
+  const rowRef = useRef(null);
+  const isActiveRow = active === node.rel;
+  useEffect(() => {
+    if (!isActiveRow) return;
+    const scroll = () => {
+      const el = rowRef.current;
+      const box = el && el.closest(".tree");
+      if (!el || !box) return;
+      const r = el.getBoundingClientRect();
+      const b = box.getBoundingClientRect();
+      /* 上下各留 8px 余量：紧贴边缘时看不出这一行是独立的一项 */
+      if (r.top < b.top + 8) box.scrollTop += r.top - b.top - 8;
+      else if (r.bottom > b.bottom - 8) box.scrollTop += r.bottom - b.bottom + 8;
+    };
+    const raf = requestAnimationFrame(scroll);
+    /* Drawer 展开是 220ms 的高度动画，动画里量的位置是中途值，
+       等它落定再校正一次。两次都只在被挡住时才滚，不会跟用户抢。 */
+    const t = setTimeout(scroll, DRAWER_MS + 40);
+    return () => { cancelAnimationFrame(raf); clearTimeout(t); };
+  }, [isActiveRow]);
+
   const icon = icons && icons[node.rel];
   /* 拖动落点的两种姿态：
      · over  = 行与行之间（这一层重排）
@@ -874,6 +913,7 @@ function FileTree({ node, depth, root, openFile, active, onCreate, onDelete, onM
   return (
     <div className="node">
       <div
+        ref={rowRef}
         className={"row" + (active === node.rel ? " active" : "")
           + (dragging ? " dragging" : "")
           + (over === "before" ? " drop-before" : "")
@@ -3254,6 +3294,11 @@ loadTree(curRoot).then((t) => {
     // 不收的话编辑区会停在 .trash/ 的内容上，而 `doc` 已经换成新文件了 ——
     // 面包屑指着 B 篇、正文显示的是回收站里的 A 篇，还以为打开失败。
     setPreview(null);
+    /* 打开的是文件夹里的某一篇：把「笔记」整栏也展开。
+       深层定位的前提是那一栏在屏幕上 —— 用户从「最近」或访达打开时，
+       整栏可能还收着，展开文件夹也没用（树压根没挂载）。
+       只这一下，不写进 uiPrefs：下次启动仍按用户自己收起来的样子。 */
+    if (String(node.rel).includes("/")) setSec((s0) => (s0.notes ? s0 : { ...s0, notes: true }));
     /* created / updated 来自 /api/tree 的 fs.stat（server 的 scan() 现在会带），
        属性面板的「创建时间 / 更新时间」两行直接用 —— 它们**不进 frontmatter**，
        那是文件系统的事实，写进文件只会变成一份对不上的副本。 */
