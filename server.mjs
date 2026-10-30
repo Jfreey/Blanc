@@ -216,6 +216,20 @@ const server = http.createServer(async (req, res) => {
     res.end(body);
   };
 
+  /* 400 有两条完全不同的路，以前都甩一句「非法路径」（2026-10-30 用户报：
+     点一篇库里的笔记弹出「打开失败：「话题探索日志」非法路径」—— 一句话没有
+     主语，看不出是库没了还是路径坏了，也没法自己修）。
+     现在分开说，并各自带上收到的值：前端能据此判断要不要重拉知识库列表，
+     用户下次截图也能直接看出是哪个 root 对不上。 */
+  const badRoot = (root) => JSON.stringify({
+    error: "这个知识库不在配置里（可能刚被移除或改名）",
+    root: String(root ?? ""),
+  });
+  const badPath = (rel) => JSON.stringify({
+    error: "路径越出了知识库范围",
+    path: String(rel ?? ""),
+  });
+
   // ---- 回收站工具 ----
   // 回收站是 <库>/.trash/，里面按原路径存放，索引记在 _index.json
   // （移动不改 mtime，光看文件时间拿不到「什么时候删的」）
@@ -583,8 +597,10 @@ const server = http.createServer(async (req, res) => {
 
     if (p === "/api/file" && req.method === "GET") {
       const absRoot = rootFromParam(url.searchParams.get("root"));
-      const abs = absRoot && safeJoin(absRoot, url.searchParams.get("path") || "");
-      if (!abs) return send(400, JSON.stringify({ error: "非法路径" }));
+      if (!absRoot) return send(400, badRoot(url.searchParams.get("root")));
+      const relParam = url.searchParams.get("path") || "";
+      const abs = safeJoin(absRoot, relParam);
+      if (!abs) return send(400, badPath(relParam));
       let content;
       try { content = await fs.readFile(abs, "utf8"); }
       catch { return send(404, JSON.stringify({ error: "文件不存在" })); }
@@ -598,8 +614,9 @@ const server = http.createServer(async (req, res) => {
     if (p === "/api/file" && req.method === "PUT") {
       const absRoot = rootStrict(url.searchParams.get("root"));
       const rel = url.searchParams.get("path") || "";
-      const abs = absRoot && safeJoin(absRoot, rel);
-      if (!abs) return send(400, JSON.stringify({ error: "非法路径" }));
+      if (!absRoot) return send(400, badRoot(url.searchParams.get("root")));
+      const abs = safeJoin(absRoot, rel);
+      if (!abs) return send(400, badPath(rel));
       /* 乐观锁：客户端带上它**读到时**的 mtime，对不上就是有人在这之后改过。
          没有这层的话，两个窗口开同一篇，后写的把前一个静默覆盖 ——
          没有提示、没有撤销、连「已保存」都照常显示。

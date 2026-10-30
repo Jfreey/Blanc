@@ -3176,6 +3176,14 @@ loadTree(curRoot).then((t) => {
       if (e?.status === 404) {
         showToast(`「${label}」已经不在磁盘上了（可能被改名或移走），列表已刷新`);
         loadTree(curRoot).catch(() => {});
+      } else if (e?.status === 400) {
+        /* 库对不上（2026-10-30 用户报「打开失败：「话题探索日志」非法路径」）：
+           这个窗口记着的 root 已经不在后端配置里了 —— 多半是另一个窗口把它移除/
+           改名了，或者 config.json 被手改过。此时干看着一句服务端的错什么也做不了，
+           所以顺手重拉知识库列表：refreshRoots 发现当前库失效会自己切到还能用的那个，
+           侧栏跟着重扫，用户再点一下就能打开。 */
+        showToast(`打开失败：「${label}」${e?.message || e}。已重新加载知识库列表`);
+        refreshRoots().catch(() => {});
       } else {
         showToast(`打开失败：「${label}」${e?.message || e}`);
       }
@@ -3199,7 +3207,7 @@ loadTree(curRoot).then((t) => {
              id: ++docIdRef.current });
     setDirty(false);
     touchRecent(node.rel, node.name);
-  }, [curRoot, dirty, touchRecent, loadTree]);
+  }, [curRoot, dirty, touchRecent, loadTree, refreshRoots]);
   useEffect(() => { openFileRef.current = () => openFile(doc && { rel: doc.rel, name: doc.name }); });
 
   /* ---- 系统递过来的文件：先看它属于哪个知识库 ----
