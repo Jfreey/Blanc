@@ -3488,9 +3488,15 @@ loadTree(curRoot).then((t) => {
     };
     if (!openedAskedRef.current) {
       openedAskedRef.current = true;
-      desktop.openedFile()
+      /* 竞速兜底：`opened_file` 正常几十毫秒就回来，但它是首帧就发的 IPC，
+         万一卡住（实测有一次一直 pending），下面的 bootSettled 就永远等不到，
+         窗口停在「选择左侧笔记开始编辑」—— 比「打开 B」更糟。
+         800ms 还没回来就当这次启动没有被双击过，直接走「打开第一篇」。 */
+      Promise.race([
+        desktop.openedFile().catch(() => null),
+        new Promise((r) => setTimeout(() => r(null), 800)),
+      ])
         .then((p) => open(p, false))                     // 冷启动：主窗口自己接管
-        .catch(() => {})
         /* 不管有没有路径，都要放行「自动打开第一篇」那一步：
            有路径时 doc 已经填上，`!doc` 会挡住；没路径才轮得到第一篇。 */
         .finally(() => setBootSettled(true));
