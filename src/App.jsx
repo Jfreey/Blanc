@@ -3426,21 +3426,33 @@ loadTree(curRoot).then((t) => {
         const imp = extApiRef.current;
         if (!imp) return;
 
+        const m = data.mtime || st.mtime;
+        /* 读全文这一段路上，自己的保存可能已经回来了（onSaved 把基准推到这一版）。
+           不补这一判，就会拿「刚刚自己写的那一版」去和编辑器里更新的一版比，
+           误报成外部改动 —— 用户打字越快越容易撞上。 */
+        if (m === knownMtimeRef.current) return;
+        /* 磁盘上这份就是本编辑器写出去的（含还在途中的那次）→ 自写，不是别人的改动。
+           只把基准挪过去，不动内容、不挂提示。 */
+        if (data.content !== imp.getText() && imp.isSelfWrite?.(data.content)) {
+          knownMtimeRef.current = m;
+          setExternalUpdate((u) => (u && u.rel === rel ? null : u));
+          return;
+        }
+
         if (data.content === imp.getText()) {
-          knownMtimeRef.current = data.mtime || st.mtime;
+          knownMtimeRef.current = m;
           setExternalUpdate((u) => (u && u.rel === rel ? null : u));
           return;
         }
         if (dirtyRef.current) {
-          const m = data.mtime || st.mtime;
           // 同一个 mtime 只挂一次，别每 1.5 秒都 setState 触发一轮重渲染
           setExternalUpdate((u) => (u && u.rel === rel && u.mtime === m
             ? u
             : { rel, theirs: data.content, mtime: m }));
           return;
         }
-        if (imp.applyExternal(data.content, data.mtime || st.mtime)) {
-          knownMtimeRef.current = data.mtime || st.mtime;
+        if (imp.applyExternal(data.content, m)) {
+          knownMtimeRef.current = m;
           setExternalUpdate(null);
           showToast("已同步磁盘上的修改");
         }
@@ -4012,6 +4024,12 @@ loadTree(curRoot).then((t) => {
      就真丢字了。现在只换 rel/name，正文交给自动保存。
      服务端会拦「目标重名」（409），错误文案由这里原样抛给 RenameCard 显示。 */
   const onRename = useCallback(async (node, to) => {
+    /* 改名前先把正文写完，并**等它真的落盘**（doSave 现在返回 promise）。
+       不等的话，还在路上的那次保存带的是旧 rel，改名把它搬走之后写盘到达，
+       就会在旧路径上新建一个文件 —— 用户看到「改完名多出一篇」。 */
+    if (doc?.rel === node.rel && saveFlushRef.current) {
+      try { await saveFlushRef.current(); } catch { /* 写失败不拦改名，后面自动保存会再试 */ }
+    }
     await api.rename(curRoot, node.rel, to);
     if (doc?.rel === node.rel) {
       setDoc((d) => (d && d.rel === node.rel

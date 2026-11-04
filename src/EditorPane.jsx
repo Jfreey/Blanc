@@ -81,6 +81,18 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
   useEffect(() => { handlers.current = { onSaved, onDirtyChange, onStats, onConflict, onSaveError, onReloadDoc }; });
 
   const savedRef = useRef(doc.content || "");
+  /* 最近几次**自己写出去**的全文（含还在途中的那次）。
+     外部同步靠「磁盘内容和编辑器里的一不一样」判断，但用户打得快时：
+     磁盘上那份是自己 300ms 前写的，编辑器里已经又有新输入 —— 光比
+     currentMd 会把自己的写入认成别人的改动。历史留几版兜住这个缝。 */
+  const selfWritesRef = useRef([]);
+  const noteSelfWrite = (text) => {
+    if (!text) return;
+    const arr = selfWritesRef.current;
+    if (arr[arr.length - 1] === text) return;
+    arr.push(text);
+    if (arr.length > 6) arr.splice(0, arr.length - 6);
+  };
   const timerRef = useRef(null);
   // 只有用户真的编辑过才允许写盘。没这个闸门的话，编辑器一旦显示的不是本文档
   // （例如文件内容为空、Crepe 退回自带示例），卸载时那次「兜底保存」会把示例文档
@@ -91,11 +103,35 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
      （另一个窗口、或用户拿别的编辑器存了），服务端回 409 而不是覆盖。
      存盘成功后要用服务端返回的新 mtime 覆盖它，否则下一次保存必然又 409。 */
   const mtimeRef = useRef(doc.mtime || 0);
-  useEffect(() => { mtimeRef.current = doc.mtime || 0; }, [doc.root, doc.rel]);
+  /* ⚠️ 这里**不能**再挂一个 [doc.root, doc.rel] 的 effect 把 mtimeRef 重置回
+     doc.mtime。改名（标题改名 / 侧栏改名）只换 rel、不重挂载编辑器，而 doc 上带的
+     还是**打开这一篇时**的 mtime —— 一重置就等于把基准退回到改名之前，
+     下一次保存必然被服务端 409 拦下，弹「这篇已被其它地方修改」。
+     换文档时编辑器整个重建（key=doc.id），useRef 初值已经足够。 */
+  /* 延迟执行的回调（排队中的保存、冲突面板的「以我为准」）必须读**当前** rel：
+     冲突面板是改名之前按下的对象，闭包里的 doc.rel 可能是旧名字 —— 拿它写盘会在
+     旧路径上新建一个文件（用户报的「改完标题后覆盖，多出一个文件」）。 */
+  const docRef = useRef(doc);
+  docRef.current = doc;
+  /* 组件是否还活着。切换文档 = 这个编辑器整个卸载（key=doc.id），但上一份
+     文档的保存请求可能还在路上；它回来时如果再调 onSaved，就会把**新文档**
+     的「已知 mtime」改写成旧文件的值 —— 新文档的下一拍轮询立刻发现对不上，
+     于是误报「磁盘上有新版本」。 */
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+  /* 同一篇的写盘串成一条链，绝不并发。以前两次保存同时在路上时，第二次带的
+     baseMtime 还是第一次写之前的旧值 → 服务端比对失败 → 误报冲突。 */
+  const saveChainRef = useRef(Promise.resolve());
   /* 冲突时把「磁盘上那份」和「我这份」一起交给 App 去弹选择。
      这里**不能**自作主张选一边 —— 覆盖会丢对方的改动，丢弃会丢用户的改动。
      状态留在这边（resolve/force 要摸 mtimeRef、savedRef），UI 交给 App。 */
   const [conflict, setConflict] = useState(null);
+  // doSave 在异步回调里被调用，闭包里可能是旧的 conflict —— 用 ref 读最新
+  const conflictRef = useRef(null);
+  conflictRef.current = conflict;
   useEffect(() => {
     if (!conflict) return;
     handlers.current.onConflict?.(conflict);
@@ -184,6 +220,10 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
       ? `---\n${propsBrokenRef.current}---\n${currentMd()}`
       : joinFrontmatter(propsRef.current, currentMd())),
 
+    /** 这段内容是不是**自己写出去的**（App 用它把自写从外部改动里摘出来） */
+    isSelfWrite: (md) => typeof md === "string"
+      && (md === savedRef.current || selfWritesRef.current.includes(md)),
+
     /** 静默替换成磁盘那份；返回 false = 编辑器还没建好，交给下一轮 */
     applyExternal: (md, mtime) => {
       const crepe = crepeRef.current;
@@ -205,6 +245,7 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
       setPropsBroken(fm.broken ?? "");
       propsBrokenRef.current = fm.broken ?? "";
       savedRef.current = md;
+      selfWritesRef.current = [];   // 换成磁盘那份了：自写历史作废，免得把旧写过的当成自己
       mtimeRef.current = mtime || 0;
       touchedRef.current = false;
       handlers.current.onDirtyChange?.(false);
@@ -219,18 +260,20 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
     /** 有未保存内容时：把两边交给 App，弹和 409 一样的对照面板 */
     conflictFor: (theirs, theirsMtime, kind = "external") => ({
       kind,
-      rel: doc.rel,
+      rel: docRef.current.rel,
       mine: impRef.current.getText(),
       theirs,
       theirsMtime,
       reload: async () => { await handlers.current.onReloadDoc?.(); },
       force: async () => {
         const text = impRef.current.getText();
-        const r = doc.external
-          ? await desktop.write(doc.rel, text, 0)
-          : await api.write(doc.root, doc.rel, text, 0);
+        const cur = docRef.current;   // 现取：面板挂着的这段时间里可能改过名
+        const r = cur.external
+          ? await desktop.write(cur.rel, text, 0)
+          : await api.write(cur.root, cur.rel, text, 0);
         if (r && r.mtime) mtimeRef.current = r.mtime;
         savedRef.current = text;
+        noteSelfWrite(text);
         handlers.current.onSaved?.(r?.mtime);
       },
     }),
@@ -244,7 +287,10 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
     // .trash/ 里的旧内容盖到活文件上 —— 用户可能正在看一篇已经恢复了的同名笔记。
     // 靠 editable=false 拦是不行的：那只是不产生编辑，不产生编辑 ≠ 不保存
     //（⌘S、切文档时的兜底 flush、标题改名都会调到 doSave）。
-    if (preview) return;
+    if (preview) return Promise.resolve();
+    /* 冲突还没解决时不要再自动写：磁盘上是别人那一版，写上去必然又是一次 409，
+       只会把对照面板重新挂一遍。用户点「以我为准」走的是 force，不经过这里。 */
+    if (conflictRef.current) return saveChainRef.current.catch(() => {});
     const raw = md ?? currentMd();
     /* 拼回 frontmatter。
        - props 是当前属性表（改过就存新值）
@@ -256,63 +302,90 @@ function EditorInner({ doc, onDirtyChange, onSaved, onFlushSave, onStats,
     const text = propsBrokenRef.current
       ? `---\n${propsBrokenRef.current}---\n${raw}`      // YAML 坏了：原样写回
       : joinFrontmatter(propsRef.current, raw);
-    if (text === savedRef.current) return;
+    /* 返回 promise：标题改名前要 await 它，确认这一版真的落到旧路径上了。
+       以前这里什么都不返回，App 的 `await saveFlushRef.current()` 等于
+       await undefined —— flush 形同虚设，改名抢在写盘前面执行，写盘落在
+       已经被搬走的旧路径上，于是磁盘上多出一个同名旧文件。
+       .catch 是为了「内容没变」这条早退：调用方 await 的是 flush 的完成，
+       不是上一次保存成败的结论，别把旧失败当成本次改名的失败。 */
+    if (text === savedRef.current) return saveChainRef.current.catch(() => {});
     savedRef.current = text;
+    noteSelfWrite(text);   // 记一笔：这一版是自己写的，轮询别当外部改动
     clearTimeout(timerRef.current);
-    // 外部文档（从 Finder 打开、不在知识库里）走桌面壳写绝对路径，
-    // server.mjs 的 safeJoin 不认这种路径（见 api.js 里 desktop 的注释）
-    const writing = doc.external
-      ? desktop.write(doc.rel, text, mtimeRef.current)
-      : api.write(doc.root, doc.rel, text, mtimeRef.current);
-    Promise.resolve(writing)
-      .then((r) => {
-        // 服务端回新的 mtime，刷新基准；下一次保存才不会自己跟自己冲突
-        if (r && r.mtime) {
-          mtimeRef.current = r.mtime;
-          /* 顺带把「更新时间」显示刷新（2026-10-16）。
-             库外文件的面板时间来自 doc.updated，只在打开时算一次 ——
-             存盘后不改的话，这一篇改了半天，显示的还是打开那天的日期。
-             库内文件不用管：它的 updated 来自 /api/tree，下次重新拉树时会更新。 */
-          if (doc.external) handlers.current.onDocTime?.(r.mtime);
-        }
-        handlers.current.onSaved?.();
-      })
-      .catch((e) => {
-        // 409 = 有人在这之后改过同一篇。**不做任何自动决策**，把两边都交上去问用户：
-        // 覆盖 = 丢对方的改动，丢弃 = 丢用户的改动，这个只能用户定。
-        if (e && e.conflict) {
-          // savedRef 退回去 —— 不然下一次任何触发都会因为「和上次一样」
-          // 被 text === savedRef.current 那道早退拦掉，用户的编辑就再也存不下去
-          savedRef.current = "";
-          setConflict({
-            mine: text,
-            theirs: e.currentContent ?? "",
-            theirsMtime: e.currentMtime || 0,
-            rel: doc.rel,
-            /** 「以磁盘为准」= 放弃我的编辑，重新读一遍文件。
-                交给 App 走 openFile（key 变 → 编辑器整体重建），
-                不在这里热替换内容 —— 重建那条路径本来就有，不出岔子。 */
-            reload: async () => handlers.current.onReloadDoc?.(),
-            /** 「以我的为准」= 跳过这次比对强写。baseMtime 传 0，
-                服务端就不参与检查（见 server.mjs PUT 里 baseMtime>0 才比对的逻辑）。
-                这是用户明确表达过「我知道有个改动，我要覆盖它」之后才走的路。 */
-            force: async () => {
-              const r = doc.external
-                ? await desktop.write(doc.rel, text, 0)
-                : await api.write(doc.root, doc.rel, text, 0);
-              if (r && r.mtime) mtimeRef.current = r.mtime;
-              savedRef.current = text;
-              handlers.current.onSaved?.();
-            },
-          });
-          return;
-        }
-        console.error("保存失败", e);
-        handlers.current.onSaveError?.(e);
-      });
+    /* 排进链里执行：同一篇永远只有一个 PUT 在路上。
+       baseMtime 在**真正发出请求的那一刻**取（不在这里取），排队期间前一次
+       保存已经把 mtimeRef 推到新值，用旧值发出去就是自找 409。 */
+    saveChainRef.current = saveChainRef.current
+      .catch(() => {})            // 前一次即便失败，也不能把后面的保存一起堵死
+      .then(() => {
+      // 外部文档（从 Finder 打开、不在知识库里）走桌面壳写绝对路径，
+      // server.mjs 的 safeJoin 不认这种路径（见 api.js 里 desktop 的注释）
+      // rel 现取：排队期间可能改过名，得写到新路径上
+      const d = docRef.current;
+      const writing = d.external
+        ? desktop.write(d.rel, text, mtimeRef.current)
+        : api.write(d.root, d.rel, text, mtimeRef.current);
+      return Promise.resolve(writing)
+        .then((r) => {
+          // 服务端回新的 mtime，刷新基准；下一次保存才不会自己跟自己冲突
+          if (r && r.mtime) {
+            mtimeRef.current = r.mtime;
+            /* 顺带把「更新时间」显示刷新（2026-10-16）。
+               库外文件的面板时间来自 doc.updated，只在打开时算一次 ——
+               存盘后不改的话，这一篇改了半天，显示的还是打开那天的日期。
+               库内文件不用管：它的 updated 来自 /api/tree，下次重新拉树时会更新。 */
+            if (d.external) handlers.current.onDocTime?.(r.mtime);
+          }
+          /* mtime 必须回传：App 拿它当「已知磁盘版本」的基准，轮询据此判断有没有
+             别人的改动。以前这里漏传了参数，基准停在打开这一篇时的旧值 ——
+             只要用户打字快，轮询就会撞上**自己刚写的那一版**，误报
+             「这篇已被其他地方修改」。
+             组件已经卸载（用户切走了这一篇）就别回传了：那会把**新文档**的
+             基准写成旧文件的 mtime。 */
+          if (aliveRef.current) handlers.current.onSaved?.(r?.mtime);
+        })
+        .catch((e) => {
+          // 409 = 有人在这之后改过同一篇。**不做任何自动决策**，把两边都交上去问用户：
+          // 覆盖 = 丢对方的改动，丢弃 = 丢用户的改动，这个只能用户定。
+          if (e && e.conflict) {
+            // savedRef 退回去 —— 不然下一次任何触发都会因为「和上次一样」
+            // 被 text === savedRef.current 那道早退拦掉，用户的编辑就再也存不下去
+            savedRef.current = "";
+            setConflict({
+              mine: text,
+              theirs: e.currentContent ?? "",
+              theirsMtime: e.currentMtime || 0,
+              rel: d.rel,
+              /** 「以磁盘为准」= 放弃我的编辑，重新读一遍文件。
+                  交给 App 走 openFile（key 变 → 编辑器整体重建），
+                  不在这里热替换内容 —— 重建那条路径本来就有，不出岔子。 */
+              reload: async () => handlers.current.onReloadDoc?.(),
+              /** 「以我的为准」= 跳过这次比对强写。baseMtime 传 0，
+                  服务端就不参与检查（见 server.mjs PUT 里 baseMtime>0 才比对的逻辑）。
+                  这是用户明确表达过「我知道有个改动，我要覆盖它」之后才走的路。 */
+              force: async () => {
+                const cur = docRef.current;   // 现取：面板弹出后名字可能又改过
+                const r = cur.external
+                  ? await desktop.write(cur.rel, text, 0)
+                  : await api.write(cur.root, cur.rel, text, 0);
+                if (r && r.mtime) mtimeRef.current = r.mtime;
+                savedRef.current = text;
+                noteSelfWrite(text);
+                handlers.current.onSaved?.(r?.mtime);
+              },
+            });
+            return;
+          }
+          console.error("保存失败", e);
+          handlers.current.onSaveError?.(e);
+        });
+    });
+    return saveChainRef.current;
   };
 
-  // 暴露给 App：标题 rename 落盘前「立即把当前正文写进旧 rel」，避免重挂载丢输入。
+  // 暴露给 App：标题改名落盘前「立即把当前正文写进旧 rel」，并在**真的写完**之后
+  // 才返回（doSave 现在返回 promise）。以前这里只调不 await，改名抢在写盘前面执行，
+  // 那次写入就落在已经被搬走的旧路径上 —— 磁盘上凭空多出一个旧名字的文件。
   // doSave 闭包持有最新 doc.rel（渲染时生成），flush 发生在 setDoc(rel) 之前 → 写的就是旧路径
   useEffect(() => { onFlushSave?.(doSave); }, [doc.root, doc.rel]); // eslint-disable-line react-hooks/exhaustive-deps
 
