@@ -348,6 +348,29 @@ const server = http.createServer(async (req, res) => {
     path: String(rel ?? ""),
   });
 
+  /* 改名失败时的 errno 翻译（2026-11-04）。
+     以前 rename 抛什么就直接 500 + `Error: ENOENT: no such file or directory, rename
+     '/Users/…/a.md' -> '…/b.md'`；而前端只显示「500 Internal Server Error」，
+     用户既不知道文件还在不在，也不知道该重试还是该换个名字。
+     这里把最常见的几种翻成「谁出了什么事、下一步怎么办」。 */
+  const renameFailText = (e) => {
+    const c = e && e.code;
+    if (c === "ENOENT") return "要改名的这一项已经不在了（可能刚被别的程序删掉或改名）";
+    if (c === "EACCES" || c === "EPERM") return "没有权限改这个位置（可能在网盘、只读目录，或被别的程序占着）";
+    if (c === "EBUSY") return "这个文件正被别的程序占用，稍等一下再试";
+    if (c === "EISDIR" || c === "ENOTDIR") return "目标位置已经有一个同名的文件夹";
+    if (c === "ENOTEMPTY" || c === "EEXIST") return "目标位置已经有一个同名的文件夹";
+    if (c === "ENAMETOOLONG") return "名字太长了，换短一点的";
+    if (c === "EXDEV") return "不能跨磁盘改名";
+    return `改名失败${c ? `（${c}）` : ""}：${(e && e.message) || e}`;
+  };
+  const renameFailCode = (e) => {
+    const c = e && e.code;
+    if (c === "ENOENT") return 404;
+    if (c === "EACCES" || c === "EPERM" || c === "EBUSY") return 403;
+    return 409;
+  };
+
   // ---- 回收站工具 ----
   // 回收站是 <库>/.trash/，里面按原路径存放，索引记在 _index.json
   // （移动不改 mtime，光看文件时间拿不到「什么时候删的」）
@@ -889,17 +912,62 @@ const server = http.createServer(async (req, res) => {
       return send(200, JSON.stringify({ ok: true }));
     }
 
+    /* 改名 / 改目录名。
+       2026-11-04 用户报「有时候改完名内容就没了，有时候报 500」—— 三条都在这段里：
+         · **目标已存在时 `fs.rename` 是静默覆盖**（POSIX 语义）。把 A 改成一篇已有的
+           B，B 的内容当场消失，连回收站都没有，接口还回 ok:true。这是数据丢失，
+           所以先查再改，一律 409 拒绝。
+         · 源不存在 / 目标是个文件夹 / 上层路径是个文件，全都直接抛 errno，
+           顶层 catch 回 500 + 一句英文。现在逐条翻成中文（见 renameFailText）。
+         · 图标 / 排序索引搬迁失败**不该让整个改名算失败**：文件已经在新名字上了，
+           这时候回 500，前端会以为没改成功（把标题还原成旧名），而磁盘上已经是新名，
+           两边就这么错开了。附属索引只记一笔日志。
+       ⚠️ 只改大小写（note.md → Note.md）必须放行：macOS 默认大小写不敏感，
+       stat 目标会命中**同一个 inode**。拿 dev+ino 比对，是同一个就是「我占我自己的位」。 */
     if (p === "/api/rename" && req.method === "POST") {
       const body = JSON.parse((await readBody(req)) || "{}");
       const absRoot = rootStrict(body.root);
-      const from = absRoot && safeJoin(absRoot, body.from || "");
-      const to = absRoot && safeJoin(absRoot, body.to || "");
-      if (!from || !to || to === absRoot) return send(400, JSON.stringify({ error: "非法路径" }));
-      await fs.mkdir(path.dirname(to), { recursive: true });
-      await fs.rename(from, to);
-      await moveIconTree(absRoot, body.from || "", body.to || "");   // 图标跟着改名一起搬（子树连前缀一起换）
-      await moveOrderKey(absRoot, body.from || "", body.to || "");  // 排序也跟着搬（#6）
-      return send(200, JSON.stringify({ ok: true, to: body.to }));
+      const fromRel = String(body.from || "");
+      const toRel = String(body.to || "");
+      const from = absRoot && safeJoin(absRoot, fromRel);
+      const to = absRoot && safeJoin(absRoot, toRel);
+      if (!from || !to || to === absRoot || from === absRoot) {
+        return send(400, JSON.stringify({ error: "非法路径" }));
+      }
+      // 名字没变（比如只补了个空格又删掉）：当成功，别去动文件
+      if (from === to) return send(200, JSON.stringify({ ok: true, to: toRel, unchanged: true }));
+
+      const src = await fs.stat(from).catch(() => null);
+      if (!src) {
+        return send(404, JSON.stringify({
+          error: "要改名的这一项已经不在了（可能刚被别的程序删掉或改名）",
+          from: fromRel,
+        }));
+      }
+      const dst = await fs.stat(to).catch(() => null);
+      if (dst && !(dst.ino === src.ino && dst.dev === src.dev)) {
+        return send(409, JSON.stringify({
+          error: `「${path.basename(toRel)}」这个名字已经有了，换一个吧`,
+          conflict: true,
+          existing: toRel,
+        }));
+      }
+      try {
+        await fs.mkdir(path.dirname(to), { recursive: true });
+      } catch {
+        return send(400, JSON.stringify({ error: "目标位置的上层路径不是一个文件夹" }));
+      }
+      try {
+        await fs.rename(from, to);
+      } catch (e) {
+        return send(renameFailCode(e), JSON.stringify({ error: renameFailText(e) }));
+      }
+      // 附属索引跟着搬；搬不动不影响改名本身（文件已经在新名字上了）
+      await moveIconTree(absRoot, fromRel, toRel)
+        .catch((e) => console.error("图标索引没跟着改名搬:", e.message));
+      await moveOrderKey(absRoot, fromRel, toRel)
+        .catch((e) => console.error("排序索引没跟着改名搬:", e.message));
+      return send(200, JSON.stringify({ ok: true, to: toRel }));
     }
 
     /* ---- 移动文件 / 文件夹（#6 的跨层级拖放）----

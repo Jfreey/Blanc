@@ -2736,14 +2736,32 @@ button.side-search:hover .ss-label { color: var(--ink); }
 /* pointer —— 这一行现在是可点的（点开预览）。目录例外，由 JSX 上按 isDir
    覆盖回 default。高亮不用自己写：.node .row.active 已经有一套
    （--row-active，和文件树里「当前打开的那篇」同款）。 */
-.tree .row.trash-row { cursor: pointer; }
-.tree .row.trash-row .name { flex: 0 1 auto; min-width: 0; }
-/* 时间贴着右边，和按钮之间留出间距；名字长了先截断名字 */
+.tree .row.trash-row { cursor: pointer; position: relative; padding-right: 6px; }
+/* 名字吃掉所有剩余宽度（2026-11-04 修「时间没靠右，名字被挤掉」）。
+   原来这里是 `flex: 0 1 auto`，意思是「宽度按内容算」—— 名字一长它没有可让的
+   余量，时间就被顶到紧贴名字右边（看着像没靠右），而时间自己又占着固定宽度，
+   两边一起把名字挤成三个字加省略号。改成 flex: 1：名字占满剩余空间、超了自己
+   截断，时间永远贴右。 */
+.tree .row.trash-row .name { flex: 1 1 auto; min-width: 0; }
+/* 时间贴着右边：宽度固定 + 右对齐，不同行长度的「刚刚 / 3 天前 / 10 月 30 日」
+   右边缘能对齐，扫一眼是一列参差的日期，而不是一段跟着名字跑的尾巴 */
 .tree .row.trash-row .trash-time {
-  flex: 0 0 auto; margin-left: auto; padding-left: 10px;
+  flex: 0 0 auto; margin-left: 8px;
+  min-width: 52px; text-align: right; white-space: nowrap;
   font-size: 11px; color: var(--faint);
 }
-.tree .row.trash-row .row-actions { flex: 0 0 auto; margin-left: 4px; }
+/* 行内按钮**浮在行上**，不再占一列布局空间（2026-11-04）。
+   原来两个按钮老老实实占着 40px，名字就少一截。现在绝对定位贴右，hover 时
+   浮出来盖住时间（下面那条 visibility: hidden 就是给它腾地方的）。
+   pointer-events 必须显式关掉：opacity:0 的元素**照样能点**，不关的话鼠标扫过
+   右侧空白就会点到看不见的「彻底删除」。 */
+.tree .row.trash-row .row-actions {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  margin: 0; padding-left: 6px; border-radius: 4px;
+  background: var(--hover-soft);
+  opacity: 0; pointer-events: none;
+}
+.tree .row.trash-row:hover .row-actions { opacity: 1; pointer-events: auto; }
 /* 行内按钮别用 --faint（太淡，看着像两个空方块），默认 --muted，hover 才变深 */
 .tree .row.trash-row .row-actions button { color: var(--muted); }
 .tree .row.trash-row .row-actions button:hover { color: var(--ink); }

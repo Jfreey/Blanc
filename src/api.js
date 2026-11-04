@@ -392,12 +392,31 @@ export const api = {
       body: JSON.stringify({ root, rel, kind, value, color: color || "" }),
     }).then(j),
 
-  rename: (root, from, to) =>
-    fetch(`${API_BASE}/api/rename`, {
+  /** 改名 / 改目录名。非 2xx 一律**抛**，并把服务端的文案带出来（2026-11-04）。
+   *
+   *  以前这里是 `.then(j)`，`j` 只会拼一句 `500 Internal Server Error` —— 用户看到
+   *  的就是这行字，而服务端其实回了「要改名的这一项已经不在了」「这个名字已经有了」
+   *  这种能看懂、也知道下一步该干什么的话。全丢了。
+   *
+   *  409 = 目标名字被占（服务端已经不会再覆盖了，回来的是「有冲突」而不是「改坏了」），
+   *  带 conflict 标记，调用方据此把标题还原、不要当成网络故障。
+   */
+  rename: async (root, from, to) => {
+    const r = await fetch(`${API_BASE}/api/rename`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ root, from, to }),
-    }).then(j),
+    });
+    const data = await r.json().catch(() => null);
+    if (!r.ok) {
+      const e = new Error((data && data.error) || `HTTP ${r.status}`);
+      e.status = r.status;
+      if (r.status === 409) e.conflict = true;
+      if (data && data.existing) e.existing = data.existing;
+      throw e;
+    }
+    return data;
+  },
 };
 
 // 知识库配置持久化在 localStorage（服务端 config 为权威，这里是 UI 偏好）

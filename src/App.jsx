@@ -4003,18 +4003,20 @@ loadTree(curRoot).then((t) => {
     });
   }, [curRoot, doc, loadTree, loadTrash, showToast]);
 
+  /* 侧栏那一行改名（右键菜单 / F2）。
+     ⚠️ 这里**不再读盘回填 content**（2026-11-04）。原来那行注释说「EditorPane 以
+     doc.rel 为 key，rename 后会重挂载，必须读回最新正文」—— 但 key 早就改成 doc.id
+     了，改名只改 rel，编辑器不重挂载，屏幕上那份就是用户手上最新的。
+     这时候 api.read 拿到的是**这一瞬间磁盘上的内容**：如果还有没落盘的输入，
+     它比编辑器里的旧，setDoc 进去等于把「最新」标记成一个旧值，下一次重挂载
+     就真丢字了。现在只换 rel/name，正文交给自动保存。
+     服务端会拦「目标重名」（409），错误文案由这里原样抛给 RenameCard 显示。 */
   const onRename = useCallback(async (node, to) => {
     await api.rename(curRoot, node.rel, to);
     if (doc?.rel === node.rel) {
-      // EditorPane 以 doc.rel 为 key，rename 后会重挂载 → 必须读回最新正文，
-      // 不能用旧快照（否则未保存的输入会被陈旧 content 覆盖）
-      try {
-        const data = await api.read(curRoot, to);
-        setDoc({ root: curRoot, rel: to, content: data.content, name: to.split("/").pop().replace(/\.md$/, "") });
-        setDirty(false);
-      } catch (e) {
-        setDoc({ ...doc, rel: to, name: to.split("/").pop().replace(/\.md$/, "") });
-      }
+      setDoc((d) => (d && d.rel === node.rel
+        ? { ...d, rel: to, name: to.split("/").pop().replace(/\.md$/, "") }
+        : d));
     }
     await loadTree(curRoot);
   }, [curRoot, doc, loadTree]);
@@ -4072,22 +4074,35 @@ loadTree(curRoot).then((t) => {
 
   const runTitleRename = useCallback(async ({ name: cleanName, rel: oldRel, prevName }) => {
     pendingTitleRef.current = null;
+    let renamed = false;
     try {
       // flush 当前正文到旧 rel（防抖期间可能有未自动保存的输入）；ref 缺失时兜底等自动保存窗口
       if (saveFlushRef.current) await saveFlushRef.current();
       else if (dirty) await new Promise((r) => setTimeout(r, 900));
       const target = oldRel.slice(0, oldRel.lastIndexOf("/") + 1) + cleanName + ".md";
       if (target === doc?.rel) return; // 期间已被别的路径改过 → 放弃本次
-      const rr = await api.rename(curRoot, oldRel, target);
-      const data = await api.read(curRoot, target);
+      await api.rename(curRoot, oldRel, target);
+      renamed = true;
+      /* 只换 rel，**不读盘回填 content**（2026-11-04，理由同 onRename）：
+         这次改名走的是「先 flush 再 rename」，磁盘上确实是最新的，但 flush 之后
+         用户可能又敲了几个字；读盘那份会把这些字当成「旧内容」写回 doc，
+         下一次重挂载就没了。正文留在编辑器里，rel 更新后自动保存会写到新路径。 */
       // 仅当用户仍停留在被改名的文档上才更新视图（期间可能已切走）
-      setDoc((d) => d && d.rel === oldRel ? { root: curRoot, rel: target, content: data.content, name: cleanName } : d);
+      setDoc((d) => (d && d.rel === oldRel ? { ...d, rel: target, name: cleanName } : d));
       setDirty(false);
       touchRecent(target, cleanName);
-      await loadTree(curRoot); // 侧栏树拿到真实新名（期间展示层已显示该名，视觉无跳变）
+      // 侧栏树拿到真实新名（期间展示层已显示该名，视觉无跳变）；拉不到不影响改名本身
+      await loadTree(curRoot).catch(() => {});
     } catch (e) {
       console.error("标题改名落盘失败:", e.message);
-      showToast(`重命名失败：${e.message || e}`);
+      if (renamed) {
+        // 名字已经改成功了，只是收尾出错：**不能**把标题还原成旧名，
+        // 否则界面写着旧名、磁盘上是新名，两边就此错开
+        showToast(`已改名，但侧栏没跟上：${e.message || e}`);
+        return;
+      }
+      // 409 = 这个名字已经有一篇了（服务端不会覆盖，文案自己能看懂，不再套一层）
+      showToast(e.conflict ? e.message : `重命名失败：${e.message || e}`);
       setDoc((d) => d && d.rel === oldRel ? { ...d, name: prevName } : d); // 还原展示层为真实名
     }
   }, [curRoot, doc, dirty, loadTree, touchRecent]);
@@ -4473,8 +4488,11 @@ loadTree(curRoot).then((t) => {
                     <div className={"node" + (preview && preview.trashRel === it.trashRel ? " active" : "")}
                       key={it.trashRel}>
                     {/* 整行可点 = 预览（和文件树里点一行开文件一个手势）。
-                        原来这行完全不可点，只有右侧两个小按钮能操作。 */}
-                    <div className="row trash-row" title={it.rel}
+                        原来这行完全不可点，只有右侧两个小按钮能操作。
+                        title 里补上完整时间：行内只显示「10 月 30 日」，跨年就看不出
+                        是哪一年了，hover 一下能拿到准确到分钟的删除时间。 */}
+                    <div className="row trash-row"
+                      title={`${it.rel}\n删除于 ${new Date(it.at).toLocaleString("zh-CN", { hour12: false })}`}
                       onClick={() => !it.isDir && openPreview(it)}
                       style={it.isDir ? { cursor: "default" } : null}>
                       <span className={"icon " + (it.isDir ? "dir" : "file")}>
