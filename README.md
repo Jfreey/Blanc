@@ -1,221 +1,204 @@
 <div align="center">
   <img src="public/blanc-icon.svg" width="96" alt="Blanc">
   <h3>Blanc</h3>
-  <p>本地优先的 Markdown 笔记。一篇一个窗口，笔记就是磁盘上的 .md 文件。</p>
+  <p>A local-first Markdown notebook. One note, one window — every note is just a .md file on your disk.</p>
   <p>
-    <a href="https://github.com/Jfreey/Blanc/releases/latest"><b>下载 macOS 版 · 5 MB</b></a><br>
-    <sub>Apple Silicon · macOS 11+ · 需要系统里有 Node.js 18+</sub>
+    <a href="https://github.com/Jfreey/Blanc/releases/latest"><b>Download for macOS · 5 MB</b></a><br>
+    <sub>Apple Silicon · macOS 11+ · requires Node.js 18+ on your system</sub>
   </p>
+  <sub><a href="README.zh-CN.md">简体中文</a> · <b>English</b></sub>
 </div>
 
 ---
 
-## 一句话
+## In one sentence
 
-Blanc 长着一张 Notion 的脸，骨子里是一个文件夹。
+Blanc has Notion's face and a folder's bones.
 
-没有账号，没有数据库，没有「正在同步」。你写的每一篇都躺在自己的磁盘上，
-是一个任何编辑器都能打开的 `.md`。应用没了，笔记还在；换台电脑，把文件夹拷走就行。
+No account, no database, no "syncing" spinner. Every note you write lives on your own disk as a `.md` file that any editor can open. Delete the app and the notes are still there; move to another machine and you just copy the folder.
 
-![左边三套亮色、右边三套暗色，各叠成一摞，白色「纸白」在最前](docs/themes.png)
+![Three light themes on the left, three dark on the right, fanned into stacks with Paper White in front](docs/themes.png)
 
-三套配色 × 明暗两版 = 六种外观。
+Three color schemes × light and dark = six looks.
 
-## 打开就能感觉到的几件事
+## What you notice right away
 
-- **图标是自由的。** 文件、文件夹、知识库、文档标题——想换成什么就换成什么。
-- **拖拽是真能拖的。** 侧栏拖文件、正文拖块，落点会亮，松手就到位。
-- **一篇一个窗口。** 不是应用内标签页，是 macOS 原生窗口，可以并排、可以跨屏、可以 Cmd+Tab。
-- **暗色是真的调过的。** 三套配色各自有亮/暗两版，选区、描边、投影都单独取值。
-- **下载 5 MB，装完 13 MB。** 里面没有 Chromium，用的是系统 WebView；后端是一个零依赖的 Node 文件服务。
+- **Icons are yours.** Files, folders, libraries, document titles — change any of them.
+- **Drag and drop that actually drags.** Drag files in the sidebar, drag blocks in the body. Drop targets light up, and things land where you let go.
+- **One note, one window.** Not in-app tabs — real macOS windows. Tile them, spread them across displays, reach them with `Cmd+Tab`.
+- **Dark mode is genuinely tuned.** Each of the three schemes has its own light and dark values, with selections, borders, and shadows chosen separately.
+- **5 MB to download, 13 MB installed.** No bundled Chromium; the UI runs on the system WebView, and the backend is a zero-dependency Node file server.
 
-![Blanc：左侧文件树，右侧 Markdown 正文，右缘是章节索引与大纲轨道](docs/screenshot.png)
+![Blanc: file tree on the left, Markdown body on the right, section index and outline rail along the right edge](docs/screenshot.png)
 
-## 它都会些什么
+## What it does
 
-### 图标，想加就加
+### Icons, whenever you want one
 
-每个条目都能有自己的脸。图标有三种来源：
+Every item can have its own face. Icons come from three places:
 
-- **内置精选**——17 个分类（文件、笔记、编辑、状态、地点、时间、品牌……）里挑；
-- **Lucide 全量 1877 枚**——中英文关键词都能搜，标签里连「日记」「旅行」这种词都配好了；
-- **任意 emoji**——筛选框里直接粘一个进来就能用，不受内置表限制。
+- **Curated built-ins** — 17 categories (files, notes, editing, status, places, time, brands…)
+- **All 1,877 Lucide icons** — searchable in English or Chinese, with tags like "diary" and "travel" already mapped
+- **Any emoji** — paste one into the filter box and it works; no need to stay inside the built-in set
 
-选完还能再挑一层颜色：红橙黄绿蓝紫灰，不挑就跟着主题走。
-面包屑里也只在你**真的换过图标**之后才显示那枚小图标，没换过的地方干干净净。
+Afterwards you can pick a color — red, orange, yellow, green, blue, purple, gray — or leave it to follow the theme. Breadcrumbs only show the little icon once you've actually changed it; untouched items stay clean.
 
-整个图标库是懒加载的：你不点开筛选框，那四千行数据根本不会被下载。
+The whole icon library is lazy-loaded: unless you open the picker, those four thousand rows are never downloaded.
 
-### 拖拽，是认真做的
+### Drag and drop, done properly
 
-**侧栏里：**
+**In the sidebar:**
 
-- 拖进别的文件夹 = 真的把文件搬过去（跨盘也好、嵌套也好，服务端会拦住「搬进自己里面」这种蠢事）；
-- 拖到同一层的别的位置 = 重排，顺序写进库里那张 `.order` 表，下次打开还是你摆的样子；
-- 文件夹拖到边缘会自己展开，不用先点开再拖。
+- Drop into another folder and the file really moves (across volumes, into nested folders — the server blocks nonsense like moving a folder into itself)
+- Drop elsewhere at the same level to reorder; the order is written to the library's `.order` table, so it's still your arrangement next time
+- Drag a folder to the edge and it expands on its own — no need to open it first
 
-**正文里：**
+**In the body:**
 
-- 拖块把手，单块搬家；
-- 框选好几个块再拖，整组一起走，不会被拆散；
-- 列表项能在列表里换位置，拖出列表自动摊平成段落，拖进列表自动变成列表项；
-- 拖动时有一个半透明幽灵跟着指针，哪儿能落哪儿亮，不能落的地方会明确告诉你不行。
+- Drag the block handle to move a single block
+- Select several blocks and drag — the group moves together, never split apart
+- List items reorder within a list, dragged out they flatten into paragraphs, dragged in they become list items
+- A translucent ghost follows the pointer; valid drop targets light up, and invalid ones tell you so
 
-排序给了四档：手动、按名称、按创建时间、按修改时间。手动档有个小体贴：
-新加的文件排在已经排好的序列**后面**，不会一进门就把你摆好的位置顶开。
+Four sort orders: manual, by name, by created, by modified. Manual has one nice touch — newly added files land **after** what you've arranged, never shoving aside a spot you placed.
 
-### 一篇一个窗口
+### One note, one window
 
-不做应用内标签页。从 Finder 双击 `.md` 就开一个新窗口，同一个文件不会开第二遍——
-已经开着就把它叫到前面来。
+No in-app tabs. Double-click a `.md` in Finder and it opens in a new window; the same file never opens twice — if it's already open, it comes to the front.
 
-新窗口是同一个进程里的另一个 webview，所以后端只有一份，不需要端口协商，也不需要
-第二个 Node 进程。可以把 Blanc 设成 `.md` 的默认编辑器，双击就进编辑状态。
+Each window is another webview in the same process, so there's only one backend: no port negotiation, no second Node process. Set Blanc as the default app for `.md` and you land straight in the editor.
 
-**库外的文件也能开。** 桌面上随手一个 `.md`，拖进来就是一个独立窗口，路径条会显示
-「外部文件 / Users / … / 那一篇」，中间太长就折叠成省略号，首尾永远看得见。
+**Files outside a library open too.** Drag any `.md` from your desktop in and it gets its own window. The path bar shows "External file / Users / … / that-note", folding the middle into an ellipsis when it gets long — the ends are always visible.
 
-### 写东西的地方
+### Where you write
 
-- Notion 式块编辑，标题、列表、引用、代码块、表格、待办都齐；
-- **frontmatter 属性头**：标签、日期、自定义属性都能可视化编辑，能加、能改名、能换类型
-  （文本 / 数字 / 日期 / 多选），显隐还分三档——常显、折叠、彻底藏起来；
-- **文字和背景着色**，颜色以行内 `<span>` 落盘，用别的编辑器打开也还在；
-- **页内查找与替换**，`⌘F` 找、`⌘R` 替换；
-- **`⌘A` 三段升级**：先选这一块的文字，再按升格成整块选中（有块框），第三次框住全文；
-  块选中时按 `⌫` 连块一起删，不留一堆空行；`Alt` 点击可以加选一个块；
-- **锁定**：把当前文档钉成只读，看长文的时候手滑也不会改坏；
-- **全宽模式**：正文不限宽，铺满整个编辑区；
-- **正文字号 15–18px、段落间距四档**，改完立刻生效，不用重启。
+- Notion-style block editing: headings, lists, quotes, code blocks, tables, to-dos
+- **frontmatter properties**, edited visually: tags, dates, and custom fields; add them, rename them, change type (text / number / date / multi-select), and show them always, collapsed, or hidden
+- **Text and background colors**, saved as inline `<span>` so they survive in other editors
+- **Find and replace** in the page: `⌘F` to find, `⌘R` to replace
+- **Three-stage `⌘A`**: select the text in a block, press again to select the whole block (frame included), a third time to select everything. `⌫` on a block selection removes the block without leaving blank lines. `Alt`-click adds another block to the selection
+- **Lock** the current note read-only, so you can't break it while reading a long one
+- **Full-width mode**: the body spans the whole editor
+- **Body text 15–18 px, four paragraph spacing levels** — applied instantly, no restart
 
-右下角那半颗胶囊里，字数、词数、字符数可以任意组合显示，也可以全关掉；
-旁边那颗「已保存 / 保存中…」一直在。自动存盘 0.8 秒防抖，`⌘S` 立刻落盘不等它。
+In the small capsule at the bottom right, word count, character count, and characters can be combined however you like, or turned off entirely. Next to it, "Saved / Saving…" is always there. Autosave debounces at 0.8 s; `⌘S` writes immediately without waiting.
 
-### 看长文的时候
+### Reading long notes
 
-右缘有一条细轨，每一条横线是一个标题，线越短层级越深，点一下平滑滚过去。
+A thin rail runs down the right edge. Each tick is a heading, shorter ticks mean deeper levels, and clicking one scrolls there smoothly.
 
-- 悬停导航条，展开完整大纲；
-- 只留导航条也行，刻度线直接可点；
-- **迷你模式**：换成更短的索引条，悬停出那一段的片段预览——想快速回忆「这篇写了啥」时很顺手。
+- Hover the rail to expand the full outline
+- Or keep just the rail — the ticks are clickable directly
+- **Mini mode**: a shorter index; hover to see a snippet of that section, handy when you're trying to remember what a note was about
 
-### 收拾东西
+### Keeping things tidy
 
-- 多知识库，随时切换，每个库还能有自己的图标；
-- `⌘K` 快速搜索，跨库找文件和目录；
-- 删除先进**回收站**，可以站内预览、还原、单条清空，或者一次倒干净；
-- 重命名、新建文件夹、拖拽移动，都在侧栏就地完成。
+- Multiple libraries, switchable at any time, each with its own icon
+- `⌘K` quick search across files and folders, all libraries
+- Deleting goes to a **trash** first: preview in place, restore, clear one item, or empty the lot
+- Rename, create folders, drag to move — all done in the sidebar
 
-### 外观
+### Appearance
 
-三套配色（纸白 / 米色 / 冷灰）× 明暗两版 × 跟随系统。这是**两个维度**：
-「米色 + 跟随系统」是米色的暗色版，不是默认色的暗色版。
+Three schemes (Paper, Sand, Slate) × light/dark × follow system. These are **two dimensions**: "Sand + follow system" is Sand's dark variant, not the default scheme's dark variant.
 
-窗口底色会在建窗之前就按你的主题铺好——切到暗色再开新窗口，不会有一帧白光闪你。
+The window background is painted before the window is created — switch to dark, open a new window, and there's no white flash.
 
-## 它有多轻
+## How light it is
 
 | | |
 |---|---|
-| 下载 | **5 MB**（压缩包），装完 **13 MB** |
-| 首屏 | 356 KB JS（gzip **109 KB**）+ 72 KB CSS（gzip 14 KB），本机出画面 **30 ms** 上下 |
-| 编辑器 | 1.3 MB（gzip 395 KB），**点开第一篇才下载**，本机约半秒 |
-| 后端 | 一个 Node 进程，常驻 **60 MB** 上下 |
-| 多开 | 一篇一个窗口，开到第六个也不会多一个进程 |
+| Download | **5 MB** (compressed), **13 MB** installed |
+| First paint | 356 KB JS (gzip **109 KB**) + 72 KB CSS (gzip 14 KB), ~**30 ms** locally |
+| Editor | 1.3 MB (gzip 395 KB), **loaded when you open the first note**, ~0.5 s locally |
+| Backend | one Node process, ~**60 MB** resident |
+| Multiple windows | one per note; opening a sixth adds no process |
 
-**包里没有 Chromium。** 界面跑在系统自带的 WebView 上，所以一个 13 MB 的 `.app`
-里只有 Rust 壳、一个 Node 可执行文件和你看到的这些前端文件。
+**No Chromium inside.** The UI runs on the system WebView, so a 13 MB `.app` contains a Rust shell, a Node executable, and the frontend files you see in this repo.
 
-极速加载，首屏只有 356 KB JS。
+Fast to load: the first screen needs only 356 KB of JS.
 
-**后端是 Node 标准库**，没有框架、没有数据库、没有第二个运行时。
-文件树、图标、回收站三份索引都在这一个进程里读写，60 MB 里跑完全部。
+**The backend is the Node standard library** — no framework, no database, no second runtime. File tree, icons, and trash indices are all read and written in that one process, entirely within 60 MB.
 
-## 架构
+## Architecture
 
 ```
-Tauri 壳 (Rust)
-  single-instance · 窗口登记表 · 库外文件读写 · 托管后端进程
-   └── Webview 窗口 × N（每个窗口一份 React 根，互不相干）
+Tauri shell (Rust)
+  single-instance · window registry · external file I/O · backend supervisor
+   └── Webview window × N (one React root each, independent)
         └── HTTP 127.0.0.1:8787
-             └── server.mjs（Node 标准库，零依赖）
-                  └── 你的 .md 文件
+             └── server.mjs (Node stdlib, zero dependencies)
+                  └── your .md files
 ```
 
 | | |
 |---|---|
-| 编辑器 | [Milkdown](https://milkdown.dev) + Crepe（ProseMirror） |
-| 框架 | React 19 · Vite 8 |
-| 桌面壳 | Tauri 2（macOS / WKWebView） |
-| 后端 | Node 标准库，无框架、无数据库 |
-| 样式 | 手写 CSS + CSS 变量主题 |
-| 图标 | Lucide（ISC）全量内联，按需加载 |
+| Editor | [Milkdown](https://milkdown.dev) + Crepe (ProseMirror) |
+| Framework | React 19 · Vite 8 |
+| Desktop shell | Tauri 2 (macOS / WKWebView) |
+| Backend | Node standard library, no framework, no database |
+| Styling | hand-written CSS + CSS variable themes |
+| Icons | all of Lucide (ISC), inlined and loaded on demand |
 
-读写库外的绝对路径走 Tauri 的 Rust 命令，只有本应用自己的窗口能调。
+Reading and writing absolute paths outside a library goes through Tauri Rust commands that only this app's own windows can call.
 
-## 跑起来
+## Running it
 
 ```bash
 npm install
 npm run tauri:build
 ```
 
-产物在 `desktop/src-tauri/target/release/bundle/macos/Blanc.app`。
+The bundle lands at `desktop/src-tauri/target/release/bundle/macos/Blanc.app`.
 
-首次启动会问你要不要建知识库：可以在用户目录下创建 `Blanc Notes`，也可以直接用
-`~/.blanc`，或者挑一个现成的文件夹。**不选就关窗，磁盘上不会多出一个字节**，
-下次启动接着问。配置存在 `~/.blanc/config.json`，删掉就重新走一遍引导。
+On first launch it asks whether to create a library: put `Blanc Notes` in your home folder, use `~/.blanc`, or pick an existing folder. **Close the window without choosing and not a byte is written** — it asks again next time. Config lives in `~/.blanc/config.json`; delete it to run onboarding again.
 
-日常开发：
+Everyday development:
 
 ```bash
-npm run tauri:dev    # Tauri 热重载
-npm run dev:all      # 纯浏览器：后端 8787 + 前端 5173
-npm run check        # 四个静态检查 + 构建
+npm run tauri:dev    # Tauri with hot reload
+npm run dev:all      # browser only: backend on 8787 + frontend on 5173
+npm run check        # four static checks + build
 ```
 
-浏览器自动化走 `scripts/cdp.mjs`（Edge + CDP，无第三方依赖）：
+Browser automation goes through `scripts/cdp.mjs` (Edge + CDP, no third-party dependencies):
 
 ```bash
 node scripts/cdp.mjs open "http://localhost:5173"
-node scripts/cdp.mjs eval "<js 表达式>"
+node scripts/cdp.mjs eval "<js expression>"
 ```
 
-> 本机反复重装时，如果不想每次都重新允许「访问文档文件夹」，先跑一次
-> `./scripts/make-signing-cert.sh`（生成一张本机自签名证书并信任）。
-> 之后构建会自动用它签名，macOS 就会认为还是同一个应用。
+> If you reinstall locally a lot and would rather not re-approve "access your Documents folder" each time, run `./scripts/make-signing-cert.sh` once — it creates and trusts a local self-signed certificate. Builds then sign with it automatically, and macOS treats them as the same app.
 
-## 目录
+## Layout
 
 ```
-src/                前端
-  App.jsx           壳、侧栏、设置面板、拖拽
-  EditorPane.jsx    Milkdown 实例、属性头、块拖动、查找替换
-  OutlineRail.jsx   右缘索引（导航条 / 大纲 / 迷你）
-  colorMarks.jsx    文字与背景着色
-  lucideAll.js      Lucide 全量图标（懒加载）
-server.mjs          文件服务（850 行，零依赖）
-desktop/src-tauri/  Rust 壳
-scripts/            静态检查 + CDP 自动化
+src/                frontend
+  App.jsx           shell, sidebar, settings, drag and drop
+  EditorPane.jsx    Milkdown instance, property header, block drag, find/replace
+  OutlineRail.jsx   right-edge index (rail / outline / mini)
+  colorMarks.jsx    text and background colors
+  lucideAll.js      full Lucide set (lazy)
+server.mjs          file server (~850 lines, zero dependencies)
+desktop/src-tauri/  Rust shell
+scripts/            static checks + CDP automation
 ```
 
-## 还没做的
+## Not done yet
 
-一份诚实的清单，按「想做」的顺序：
+An honest list, roughly in the order I'd like to tackle it:
 
-- [ ] 同步 / 多端（目前是纯本地）
-- [ ] Windows / Linux 适配（`icon.ico` 还是占位图）
-- [ ] Developer ID 签名 + 公证，让别人下载就能直接打开
-- [ ] QuickLook 预览扩展（代码已写好，等签名流程一起开）
-- [ ] 从文件导入主题
-- [ ] `⌘,` 打开设置
-- [ ] 快捷键自定义绑定（现在是一份「按下去验过的」只读清单）
-- [ ] 封面图与评论区块
+- [ ] Sync / multi-device (purely local today)
+- [ ] Windows / Linux support (`icon.ico` is still a placeholder)
+- [ ] Developer ID signing + notarization, so downloads open without a warning
+- [ ] QuickLook preview extension (code is written, waiting on the signing flow)
+- [ ] Import themes from a file
+- [ ] `⌘,` to open settings
+- [ ] Custom keybindings (today it's a read-only list of shortcuts that have been tried)
+- [ ] Cover images and comment blocks
 
-## 许可
+## License
 
-**MIT**（见 [`LICENSE`](LICENSE)）。依赖均为 MIT / Apache-2.0 / ISC，与之兼容。
+**MIT** (see [`LICENSE`](LICENSE)). Dependencies are MIT / Apache-2.0 / ISC, all compatible.
 
-自托管的 **Inter** 与 **Rubik** 字体遵循 **SIL OFL-1.1**
-（见 [`public/fonts/LICENSE.md`](public/fonts/LICENSE.md)）——OFL 要求随字体附带许可，
-这一条已满足，两者与 MIT 兼容。
+The self-hosted **Inter** and **Rubik** fonts are under **SIL OFL-1.1** (see [`public/fonts/LICENSE.md`](public/fonts/LICENSE.md)) — OFL requires the license to ship with the fonts, which is satisfied here, and both are compatible with MIT.
